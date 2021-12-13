@@ -1,0 +1,3 @@
+[submodule "thirdparty/MerlinEngine"]
+	path = thirdparty/MerlinEngine
+	url = https://github.com/kshatos/MerlinEngine.git
