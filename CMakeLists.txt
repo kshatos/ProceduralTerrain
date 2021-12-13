@@ -5,6 +5,8 @@ add_subdirectory(thirdparty/MerlinEngine)
 
 set(PROCEDURAL_TERRAIN_SOURCE
     ProceduralTerrain/main.cpp
+    ProceduralTerrain/cube_sphere.cpp
+    ProceduralTerrain/cube_sphere.hpp
 )
 
 add_executable(ProceduralTerrain
