@@ -27,6 +27,19 @@ glm::vec3 FaceToCube(
     }
 }
 
+glm::vec3 CubeToSphere(const glm::vec3& p)
+{
+    auto x2 = p.x * p.x;
+    auto y2 = p.y * p.y;
+    auto z2 = p.z * p.z;
+
+    auto x = p.x * glm::sqrt(1.0f - (y2 + z2) / 2 + (y2 * z2) / 3);
+    auto y = p.y * glm::sqrt(1.0f - (z2 + x2) / 2 + (z2 * x2) / 3);
+    auto z = p.z * glm::sqrt(1.0f - (x2 + y2) / 2 + (x2 * y2) / 3);
+
+    return glm::vec3(x, y, z);
+}
+
 glm::vec2 FaceUVToCubemapUV(
     const CubeFace& face,
     const float& u,
@@ -101,7 +114,7 @@ std::shared_ptr<Mesh<Vertex_XNUV>> BuildSphereMesh(int n_face_divisions)
 
                 // Vertex
                 auto& vertex = mesh->GetVertex(vertex_index);
-                vertex.position = FaceToCube(face, face_u, face_v);
+                vertex.position = CubeToSphere(FaceToCube(face, face_u, face_v));
                 vertex.normal = glm::normalize(vertex.position);
                 vertex.uv = FaceUVToCubemapUV(face, face_u, face_v);
 
@@ -109,13 +122,13 @@ std::shared_ptr<Mesh<Vertex_XNUV>> BuildSphereMesh(int n_face_divisions)
                 if (i != n_face_divisions - 1 && j != n_face_divisions - 1)
                 {
                     mesh->GetIndex(triangle_index, 0) = vertex_index;
-                    mesh->GetIndex(triangle_index, 1) = vertex_index + n_face_divisions + 1;
-                    mesh->GetIndex(triangle_index, 2) = vertex_index + 1;
+                    mesh->GetIndex(triangle_index, 1) = vertex_index + 1;
+                    mesh->GetIndex(triangle_index, 2) = vertex_index + n_face_divisions + 1;
                     triangle_index++;
 
                     mesh->GetIndex(triangle_index, 0) = vertex_index;
-                    mesh->GetIndex(triangle_index, 1) = vertex_index + n_face_divisions;
-                    mesh->GetIndex(triangle_index, 2) = vertex_index + n_face_divisions + 1;
+                    mesh->GetIndex(triangle_index, 1) = vertex_index + n_face_divisions + 1;
+                    mesh->GetIndex(triangle_index, 2) = vertex_index + n_face_divisions;
                     triangle_index++;
                 }
 

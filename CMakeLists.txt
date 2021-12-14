@@ -13,6 +13,7 @@ add_executable(ProceduralTerrain
     ${PROCEDURAL_TERRAIN_SOURCE}
 )
 set_property(TARGET ProceduralTerrain PROPERTY CXX_STANDARD 17)
+set_property(TARGET ProceduralTerrain PROPERTY VS_DEBUGGER_WORKING_DIRECTORY $<TARGET_FILE_DIR:ProceduralTerrain>)
 
 target_include_directories(ProceduralTerrain
     PUBLIC
@@ -22,4 +23,8 @@ target_include_directories(ProceduralTerrain
 target_link_libraries(ProceduralTerrain
     PUBLIC
     Merlin
+)
+add_custom_command(
+    TARGET ProceduralTerrain PRE_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${MERLIN_ASSET_DIR} $<TARGET_FILE_DIR:ProceduralTerrain>/CoreAssets
 )
