@@ -7,6 +7,8 @@ set(PROCEDURAL_TERRAIN_SOURCE
     ProceduralTerrain/main.cpp
     ProceduralTerrain/cube_sphere.cpp
     ProceduralTerrain/cube_sphere.hpp
+    ProceduralTerrain/cube_noise.cpp
+    ProceduralTerrain/cube_noise.hpp
 )
 
 add_executable(ProceduralTerrain

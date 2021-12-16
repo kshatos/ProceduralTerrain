@@ -79,32 +79,28 @@ public:
 
     virtual void HandleEvent(AppEvent& app_event) override
     {
-        app_event.Dispatch<MouseScrolledEvent>(
-            [this](MouseScrolledEvent& e)
-        {
-            float th = e.GetYScrollDelta() * 1.0e-1f;
-            float c = glm::cos(th);
-            float s = glm::sin(th);
-            camera->GetTransform().Rotate(glm::quat(c, 0.0f, s, 0.0f));
-            return true;
-        });
     }
 
     void MoveCamera(float time_step)
     {
+        const auto& up = camera->GetTransform().Up();
+        const auto& right = camera->GetTransform().Right();
+        const auto& forward = camera->GetTransform().Forward();
         float speed = 5.0e-1f;
         if (Input::GetKeyDown(Key::W))
-            camera->GetTransform().Translate(glm::vec3(0.0f, 0.0f, -speed * time_step));
+            camera->GetTransform().Translate(+forward * speed * time_step);
         if (Input::GetKeyDown(Key::A))
-            camera->GetTransform().Translate(glm::vec3(-speed * time_step, 0.0f, 0.0f));
+            camera->GetTransform().Translate(-right* speed * time_step);
         if (Input::GetKeyDown(Key::S))
-            camera->GetTransform().Translate(glm::vec3(0.0f, 0.0f, speed * time_step));
+            camera->GetTransform().Translate(-forward * speed * time_step);
         if (Input::GetKeyDown(Key::D))
-            camera->GetTransform().Translate(glm::vec3(speed * time_step, 0.0f, 0.0f));
+            camera->GetTransform().Translate(+right * speed * time_step);
         if (Input::GetKeyDown(Key::Z))
-            camera->GetTransform().Translate(glm::vec3(0.0f, speed * time_step, 0.0f));
+            camera->GetTransform().Translate(+up * speed * time_step);
         if (Input::GetKeyDown(Key::X))
-            camera->GetTransform().Translate(glm::vec3(0.0f, -speed * time_step, 0.0f));
+            camera->GetTransform().Translate(-up * speed * time_step);
+
+        camera->GetTransform().Rotate(up, Input::GetMouseScrollDelta().y * 1.0e-1f);
     }
 };
 
