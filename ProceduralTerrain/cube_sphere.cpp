@@ -1,4 +1,5 @@
 #include "cube_sphere.hpp"
+#include "Merlin/Render/cubemap.hpp"
 
 
 glm::vec3 FaceToCube(
@@ -103,8 +104,9 @@ std::shared_ptr<Mesh<Vertex_XNUV>> BuildSphereMesh(int n_face_divisions)
     // Add data
     uint32_t vertex_index = 0;
     uint32_t triangle_index = 0;
-    for (const auto& face : CubeFaces)
+    for (int face_id =CubeFace::Begin; face_id<CubeFace::End; ++face_id)
     {
+        auto face = static_cast<CubeFace>(face_id);
         for (int i = 0; i < n_face_divisions; ++i)
         {
             float face_u = i / (n_face_divisions - 1.0f);

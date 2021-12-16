@@ -7,6 +7,8 @@ set(PROCEDURAL_TERRAIN_SOURCE
     ProceduralTerrain/main.cpp
     ProceduralTerrain/cube_sphere.cpp
     ProceduralTerrain/cube_sphere.hpp
+    ProceduralTerrain/noise3d.cpp
+    ProceduralTerrain/noise3d.hpp
 )
 
 add_executable(ProceduralTerrain
@@ -27,4 +29,8 @@ target_link_libraries(ProceduralTerrain
 add_custom_command(
     TARGET ProceduralTerrain PRE_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${MERLIN_ASSET_DIR} $<TARGET_FILE_DIR:ProceduralTerrain>/CoreAssets
+)
+add_custom_command(
+    TARGET ProceduralTerrain PRE_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets $<TARGET_FILE_DIR:ProceduralTerrain>/Assets
 )
