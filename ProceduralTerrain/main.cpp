@@ -11,8 +11,8 @@ using namespace Merlin;
 class SceneLayer : public Layer
 {
     std::shared_ptr<Camera> camera;
-    std::shared_ptr<Shader> main_shader;
     std::shared_ptr<Texture2D> main_texture;
+    std::shared_ptr<Material> main_material;
     std::shared_ptr<Cubemap> main_cubemap;
     std::shared_ptr<Mesh<Vertex_XNUV>> mesh;
     GameScene scene;
@@ -28,11 +28,15 @@ public:
                 TextureWrapMode::Repeat,
                 TextureFilterMode::Linear));
 
-        main_shader = Shader::CreateFromFiles(
+        auto main_shader = Shader::CreateFromFiles(
             ".\\Assets\\Shaders\\cube_sphere.vert",
             ".\\Assets\\Shaders\\cube_sphere.frag");
         main_shader->Bind();
         main_shader->SetUniformInt("u_albedo", 0);
+        main_material = std::make_shared<Material>(
+            main_shader,
+            BufferLayout{},
+            std::vector<std::string>{});
 
         auto cubemap_data = std::make_shared<CubemapData>(512, 1);
         std::vector<std::thread> threads;
@@ -64,7 +68,7 @@ public:
         main_cubemap = UploadCubemap(cubemap_data);
 
         mesh = BuildSphereMesh(20);
-        auto varray = UploadMesh(*mesh);
+        auto varray = UploadMesh(mesh);
 
         // Camera
         camera = std::make_shared<PerspectiveCamera>(glm::pi<float>() / 3.0f, 1.0f, 0.1f, 20.0f);
@@ -76,7 +80,7 @@ public:
             auto transform_comp = entity->AddComponent<TransformComponent>();
             auto mesh_render_comp = entity->AddComponent<MeshRenderComponent>();
             mesh_render_comp->varray = varray;
-            mesh_render_comp->shader = main_shader;
+            mesh_render_comp->material = main_material;
             scene.AddEntity(entity);
         }
         {// Light
