@@ -33,11 +33,14 @@ public:
             ".\\Assets\\Shaders\\cube_sphere.vert",
             ".\\Assets\\Shaders\\cube_sphere.frag");
         main_shader->Bind();
-        main_shader->SetUniformInt("u_albedo", 0);
         main_material = std::make_shared<Material>(
             main_shader,
             BufferLayout{},
-            std::vector<std::string>{});
+            std::vector<std::string>{
+                "u_albedo",
+                "u_normal"
+            }
+        );
 
         int resolution = 512;
         float spacing = 1.0f / resolution;
@@ -76,9 +79,9 @@ public:
         {
             auto work = [face_id, heightmap_data, normal_data, spacing]() {
                 auto face = static_cast<CubeFace>(face_id);
-                for (int j = 1; j < heightmap_data->GetResolution()-1; ++j)
+                for (int j = 1; j < heightmap_data->GetResolution() - 1; ++j)
                 {
-                    for (int i = 1; i < heightmap_data->GetResolution()-1; ++i)
+                    for (int i = 1; i < heightmap_data->GetResolution() - 1; ++i)
                     {
                         glm::vec3 normal;
                         normal.x = 0.5f * (
@@ -101,7 +104,10 @@ public:
         for (auto& thread : threads)
             thread.join();
 
-        height_cubemap = UploadCubemap(normal_data);
+        height_cubemap = UploadCubemap(heightmap_data);
+        normal_cubemap = UploadCubemap(normal_data);
+        main_material->SetTexture("u_albedo", height_cubemap);
+        main_material->SetTexture("u_normal", normal_cubemap);
 
         mesh = BuildSphereMesh(20);
         CalculateTangentFrame(mesh);
@@ -125,6 +131,7 @@ public:
             auto light_comp = entity->AddComponent<DirectionalLightComponent>();
             light_comp->data.color = glm::vec3(0.5, 0.7, 0.5);
             light_comp->data.direction = glm::normalize(glm::vec3(1.0, 0.0, -1.0));
+            light_comp->data.irradiance = 10.0f;
             scene.AddEntity(entity);
         }
 
@@ -145,7 +152,6 @@ public:
                 Application::Get().GeMaintWindow()->GetHeight());
             Renderer::SetClearColor(glm::vec4(0.2f, 0.3f, 0.3f, 1.0f));
             Renderer::Clear();
-            height_cubemap->Bind();
             scene.RenderScene();
         }
     }
@@ -163,7 +169,7 @@ public:
         if (Input::GetKeyDown(Key::W))
             camera->GetTransform().Translate(+forward * speed * time_step);
         if (Input::GetKeyDown(Key::A))
-            camera->GetTransform().Translate(-right* speed * time_step);
+            camera->GetTransform().Translate(-right * speed * time_step);
         if (Input::GetKeyDown(Key::S))
             camera->GetTransform().Translate(-forward * speed * time_step);
         if (Input::GetKeyDown(Key::D))
