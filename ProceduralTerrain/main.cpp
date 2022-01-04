@@ -14,7 +14,7 @@ class SceneLayer : public Layer
     std::shared_ptr<Texture2D> main_texture;
     std::shared_ptr<Material> main_material;
     std::shared_ptr<Cubemap> main_cubemap;
-    std::shared_ptr<Mesh<Vertex_XNUV>> mesh;
+    std::shared_ptr<Mesh<Vertex_XNTBUV>> mesh;
     GameScene scene;
 
 public:
@@ -68,6 +68,7 @@ public:
         main_cubemap = UploadCubemap(cubemap_data);
 
         mesh = BuildSphereMesh(20);
+        CalculateTangentFrame(mesh);
         auto varray = UploadMesh(mesh);
 
         // Camera

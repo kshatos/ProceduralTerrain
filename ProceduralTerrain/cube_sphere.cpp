@@ -88,7 +88,7 @@ glm::vec2 FaceUVToCubemapUV(
         glm::clamp(uv.y, 0.0f, 1.0f));
 }
 
-std::shared_ptr<Mesh<Vertex_XNUV>> BuildSphereMesh(int n_face_divisions)
+std::shared_ptr<Mesh<Vertex_XNTBUV>> BuildSphereMesh(int n_face_divisions)
 {
     // Initialize mesh storage
     int n_vertices_per_face = n_face_divisions * n_face_divisions;
@@ -97,7 +97,7 @@ std::shared_ptr<Mesh<Vertex_XNUV>> BuildSphereMesh(int n_face_divisions)
     int n_triangles_per_face = (n_face_divisions - 1) * (n_face_divisions - 1) * 2;
     int n_triangles = n_triangles_per_face * 6;
 
-    auto mesh = std::make_shared<Mesh<Vertex_XNUV>>();
+    auto mesh = std::make_shared<Mesh<Vertex_XNTBUV>>();
     mesh->SetVertexCount(n_vertices);
     mesh->SetTriangleCount(n_triangles);
 
