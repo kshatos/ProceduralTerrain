@@ -13,7 +13,8 @@ class SceneLayer : public Layer
     std::shared_ptr<Camera> camera;
     std::shared_ptr<Texture2D> main_texture;
     std::shared_ptr<Material> main_material;
-    std::shared_ptr<Cubemap> main_cubemap;
+    std::shared_ptr<Cubemap> height_cubemap;
+    std::shared_ptr<Cubemap> normal_cubemap;
     std::shared_ptr<Mesh<Vertex_XNTBUV>> mesh;
     GameScene scene;
 
@@ -38,17 +39,21 @@ public:
             BufferLayout{},
             std::vector<std::string>{});
 
-        auto cubemap_data = std::make_shared<CubemapData>(512, 1);
+        int resolution = 512;
+        float spacing = 1.0f / resolution;
+        auto heightmap_data = std::make_shared<CubemapData>(resolution, 1);
+        auto normal_data = std::make_shared<CubemapData>(resolution, 3);
+        // Calculate heightmap
         std::vector<std::thread> threads;
         for (int face_id = CubeFace::Begin; face_id < CubeFace::End; face_id++)
         {
-            auto work = [face_id, cubemap_data]() {
+            auto work = [face_id, heightmap_data]() {
                 auto face = static_cast<CubeFace>(face_id);
-                for (int j = 0; j < cubemap_data->GetResolution(); ++j)
+                for (int j = 0; j < heightmap_data->GetResolution(); ++j)
                 {
-                    for (int i = 0; i < cubemap_data->GetResolution(); ++i)
+                    for (int i = 0; i < heightmap_data->GetResolution(); ++i)
                     {
-                        auto point = cubemap_data->GetPixelCubePoint(face, i, j);
+                        auto point = heightmap_data->GetPixelCubePoint(face, i, j);
                         point = glm::normalize(point);
 
                         float ridge_noise = FractalRidgeNoise(point, 10.0f, 4, 0.7f, 2.0f);
@@ -56,7 +61,7 @@ public:
                         float blend = 0.5f * (glm::simplex(3.0f * point) + 1.0f);
                         float noise = blend * ridge_noise + (1.0 - blend) * smooth_noise;
 
-                        cubemap_data->GetPixel(face, i, j, 0) = 0.5 + 0.2 * noise;
+                        heightmap_data->GetPixel(face, i, j, 0) = 0.5 + 0.2 * noise;
                     }
                 }
             };
@@ -65,7 +70,38 @@ public:
         for (auto& thread : threads)
             thread.join();
 
-        main_cubemap = UploadCubemap(cubemap_data);
+        // Calculate normal map
+        threads.clear();
+        for (int face_id = CubeFace::Begin; face_id < CubeFace::End; face_id++)
+        {
+            auto work = [face_id, heightmap_data, normal_data, spacing]() {
+                auto face = static_cast<CubeFace>(face_id);
+                for (int j = 1; j < heightmap_data->GetResolution()-1; ++j)
+                {
+                    for (int i = 1; i < heightmap_data->GetResolution()-1; ++i)
+                    {
+                        glm::vec3 normal;
+                        normal.x = 0.5f * (
+                            heightmap_data->GetPixel(face, i + 1, j, 0) -
+                            heightmap_data->GetPixel(face, i - 1, j, 0)) / spacing;
+                        normal.y = 0.5f * (
+                            heightmap_data->GetPixel(face, i, j + 1, 0) -
+                            heightmap_data->GetPixel(face, i, j - 1, 0)) / spacing;
+                        normal.z = 1.0f;
+                        normal = glm::normalize(normal);
+                        normal = 0.5f * (normal + 1.0f);
+                        normal_data->GetPixel(face, i, j, 0) = normal.x;
+                        normal_data->GetPixel(face, i, j, 1) = normal.y;
+                        normal_data->GetPixel(face, i, j, 2) = normal.z;
+                    }
+                }
+            };
+            threads.emplace_back(work);
+        }
+        for (auto& thread : threads)
+            thread.join();
+
+        height_cubemap = UploadCubemap(normal_data);
 
         mesh = BuildSphereMesh(20);
         CalculateTangentFrame(mesh);
@@ -109,7 +145,7 @@ public:
                 Application::Get().GeMaintWindow()->GetHeight());
             Renderer::SetClearColor(glm::vec4(0.2f, 0.3f, 0.3f, 1.0f));
             Renderer::Clear();
-            main_cubemap->Bind();
+            height_cubemap->Bind();
             scene.RenderScene();
         }
     }
