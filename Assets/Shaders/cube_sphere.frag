@@ -202,14 +202,9 @@ out vec4 FragColor;
 
 void main()
 {
-    mat3 TBN = mat3(
-        normalize(Tangent),
-        normalize(Bitangent),
-        normalize(Normal));
-
     vec3 normal = texture(u_normal, Pos).xyz;
     normal  = normal * 2.0 - 1.0;
-    normal = normalize(TBN * normal);
+    normal = normalize(normal);
     vec3 albedo = texture(u_albedo, Pos).xyz;
 
     PBRSurfaceData surface;
@@ -217,7 +212,7 @@ void main()
     surface.normal = normal;
     surface.albedo = vec3(1.0, 0.0, 0.0);//albedo;
     surface.metallic = 0.0;
-    surface.roughness = 0.01;
+    surface.roughness = 0.1;
     surface.roughness *= surface.roughness;
 
     // Accumulate lighting contributions
@@ -241,5 +236,5 @@ void main()
     result = result / (result + vec3(1.0));
     result = pow(result, vec3(1.0/2.2)); 
 
-    FragColor = vec4(result, 1.0);
+    FragColor = vec4(surface.normal, 1.0);
 }

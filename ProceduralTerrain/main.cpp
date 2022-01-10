@@ -59,12 +59,12 @@ public:
                         auto point = heightmap_data->GetPixelCubePoint(face, i, j);
                         point = glm::normalize(point);
 
-                        float ridge_noise = FractalRidgeNoise(point, 10.0f, 4, 0.7f, 2.0f);
-                        float smooth_noise = FractalNoise(point, 5.0f, 4, 0.7f, 2.0f);
+                        float ridge_noise = FractalRidgeNoise(point, 4.0f, 4, 0.7f, 2.0f);
+                        float smooth_noise = FractalNoise(point, 1.0f, 4, 0.7f, 2.0f);
                         float blend = 0.5f * (glm::simplex(3.0f * point) + 1.0f);
                         float noise = blend * ridge_noise + (1.0 - blend) * smooth_noise;
 
-                        heightmap_data->GetPixel(face, i, j, 0) = 0.5 + 0.2 * noise;
+                        heightmap_data->GetPixel(face, i, j, 0) = 0.5 + 0.01 * noise;
                     }
                 }
             };
@@ -77,20 +77,30 @@ public:
         threads.clear();
         for (int face_id = CubeFace::Begin; face_id < CubeFace::End; face_id++)
         {
-            auto work = [face_id, heightmap_data, normal_data, spacing]() {
+            auto work = [face_id, heightmap_data, normal_data, spacing, resolution]() {
                 auto face = static_cast<CubeFace>(face_id);
-                for (int j = 1; j < heightmap_data->GetResolution() - 1; ++j)
+                for (int j = 0; j < heightmap_data->GetResolution(); ++j)
                 {
-                    for (int i = 1; i < heightmap_data->GetResolution() - 1; ++i)
+                    for (int i = 0; i < heightmap_data->GetResolution(); ++i)
                     {
-                        glm::vec3 normal;
-                        normal.x = 0.5f * (
-                            heightmap_data->GetPixel(face, i + 1, j, 0) -
-                            heightmap_data->GetPixel(face, i - 1, j, 0)) / spacing;
-                        normal.y = 0.5f * (
-                            heightmap_data->GetPixel(face, i, j + 1, 0) -
-                            heightmap_data->GetPixel(face, i, j - 1, 0)) / spacing;
-                        normal.z = 1.0f;
+                        uint32_t ie = glm::min(i + 1, resolution - 1);
+                        uint32_t iw = glm::max(i - 1, 0);
+                        uint32_t jn = glm::min(j + 1, resolution - 1);
+                        uint32_t js = glm::max(j - 1, 0);
+
+                        auto pe = glm::normalize(heightmap_data->GetPixelCubePoint(face, ie, j));
+                        pe *= 1.0 + heightmap_data->GetPixel(face, ie, j, 0);
+
+                        auto pw = glm::normalize(heightmap_data->GetPixelCubePoint(face, iw, j));
+                        pw *= 1.0 + heightmap_data->GetPixel(face, iw, j, 0);
+
+                        auto pn = glm::normalize(heightmap_data->GetPixelCubePoint(face, i, jn));
+                        pn *= 1.0 + heightmap_data->GetPixel(face, i, jn, 0);
+
+                        auto ps = glm::normalize(heightmap_data->GetPixelCubePoint(face, i, js));
+                        ps *= 1.0 + heightmap_data->GetPixel(face, i, js, 0);
+
+                        auto normal = glm::cross(pe - pw, pn - ps);
                         normal = glm::normalize(normal);
                         normal = 0.5f * (normal + 1.0f);
                         normal_data->GetPixel(face, i, j, 0) = normal.x;
@@ -110,7 +120,7 @@ public:
         main_material->SetTexture("u_normal", normal_cubemap);
 
         mesh = BuildSphereMesh(20);
-        CalculateTangentFrame(mesh);
+        //CalculateTangentFrame(mesh);
         auto varray = UploadMesh(mesh);
 
         // Camera
@@ -130,7 +140,7 @@ public:
             auto entity = std::make_shared<Entity>();
             auto light_comp = entity->AddComponent<DirectionalLightComponent>();
             light_comp->data.color = glm::vec3(0.5, 0.7, 0.5);
-            light_comp->data.direction = glm::normalize(glm::vec3(1.0, 0.0, -1.0));
+            light_comp->data.direction = glm::normalize(glm::vec3(0.0, -1.0, 0.0));
             light_comp->data.irradiance = 10.0f;
             scene.AddEntity(entity);
         }

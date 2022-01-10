@@ -11,20 +11,20 @@ glm::vec3 FaceToCube(
     float vc = 2.0f * v - 1.0f;
     switch (face)
     {
-    case CubeFace::PositiveX:
-        return glm::vec3(1.0f, vc, uc);
-    case CubeFace::NegativeX:
-        return glm::vec3(-1.0f, vc, -uc);
-    case CubeFace::PositiveY:
-        return glm::vec3(uc, 1.0f, vc);
-    case CubeFace::NegativeY:
-        return glm::vec3(uc, -1.0f, -vc);
-    case CubeFace::PositiveZ:
-        return glm::vec3(-uc, vc, 1.0f);
-    case CubeFace::NegativeZ:
-        return glm::vec3(uc, vc, -1.0f);
+    case PositiveX:
+        return glm::vec3(+1.0f, -vc, -uc);
+    case NegativeX:
+        return glm::vec3(-1.0f, -vc, +uc);
+    case PositiveY:
+        return glm::vec3(+uc, +1.0f, +vc);
+    case NegativeY:
+        return glm::vec3(+uc, -1.0f, -vc);
+    case PositiveZ:
+        return glm::vec3(+uc, -vc, +1.0f);
+    case NegativeZ:
+        return glm::vec3(-uc, -vc, -1.0f);
     default:
-        return glm::vec3();
+        return glm::vec3(0.0);
     }
 }
 
@@ -104,7 +104,7 @@ std::shared_ptr<Mesh<Vertex_XNTBUV>> BuildSphereMesh(int n_face_divisions)
     // Add data
     uint32_t vertex_index = 0;
     uint32_t triangle_index = 0;
-    for (int face_id =CubeFace::Begin; face_id<CubeFace::End; ++face_id)
+    for (int face_id = CubeFace::Begin; face_id < CubeFace::End; ++face_id)
     {
         auto face = static_cast<CubeFace>(face_id);
         for (int i = 0; i < n_face_divisions; ++i)
@@ -118,7 +118,7 @@ std::shared_ptr<Mesh<Vertex_XNTBUV>> BuildSphereMesh(int n_face_divisions)
                 auto& vertex = mesh->GetVertex(vertex_index);
                 vertex.position = CubeToSphere(FaceToCube(face, face_u, face_v));
                 vertex.normal = glm::normalize(vertex.position);
-                vertex.uv = FaceUVToCubemapUV(face, face_u, face_v);
+                vertex.uv = glm::vec2(face_u, face_v);
 
                 // Triangles
                 if (i != n_face_divisions - 1 && j != n_face_divisions - 1)
