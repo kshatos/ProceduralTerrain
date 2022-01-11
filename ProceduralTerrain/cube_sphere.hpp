@@ -7,6 +7,6 @@
 
 using namespace Merlin;
 
-std::shared_ptr<Mesh<Vertex_XNUV>> BuildSphereMesh(int n_face_divisions);
+std::shared_ptr<Mesh<Vertex_XNTBUV>> BuildSphereMesh(int n_face_divisions);
 
 #endif

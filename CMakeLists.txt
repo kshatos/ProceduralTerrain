@@ -28,9 +28,9 @@ target_link_libraries(ProceduralTerrain
 )
 add_custom_command(
     TARGET ProceduralTerrain PRE_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${MERLIN_ASSET_DIR} $<TARGET_FILE_DIR:ProceduralTerrain>/CoreAssets
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${MERLIN_ASSET_DIR} $<TARGET_FILE_DIR:ProceduralTerrain>/Assets
 )
 add_custom_command(
     TARGET ProceduralTerrain PRE_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets $<TARGET_FILE_DIR:ProceduralTerrain>/Assets
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets $<TARGET_FILE_DIR:ProceduralTerrain>/CustomAssets
 )
