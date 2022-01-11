@@ -27,15 +27,15 @@ public:
     {
         // Load Data
         main_texture = Texture2D::Create(
-            ".\\CoreAssets\\Textures\\debug.jpg",
+            ".\\Assets\\Textures\\debug.jpg",
             Texture2DProperties(
                 TextureWrapMode::Repeat,
                 TextureWrapMode::Repeat,
                 TextureFilterMode::Linear));
 
         auto main_shader = Shader::CreateFromFiles(
-            ".\\Assets\\Shaders\\cube_sphere.vert",
-            ".\\Assets\\Shaders\\cube_sphere.frag");
+            ".\\CustomAssets\\Shaders\\cube_sphere.vert",
+            ".\\CustomAssets\\Shaders\\cube_sphere.frag");
         main_shader->Bind();
         main_material = std::make_shared<Material>(
             main_shader,
@@ -68,7 +68,7 @@ public:
                         float blend = 0.5f * (glm::simplex(3.0f * point) + 1.0f);
                         float noise = blend * ridge_noise + (1.0 - blend) * smooth_noise;
 
-                        heightmap_data->GetPixel(face, i, j, 0) = 0.5 + 0.01 * noise;
+                        heightmap_data->GetPixel(face, i, j, 0) = 0.5 + 0.02 * noise;
                     }
                 }
             };
@@ -104,7 +104,7 @@ public:
                         auto ps = glm::normalize(heightmap_data->GetPixelCubePoint(face, i, js));
                         ps *= 1.0 + heightmap_data->GetPixel(face, i, js, 0);
 
-                        auto normal = glm::cross(pe - pw, pn - ps);
+                        auto normal = -glm::cross(pe - pw, pn - ps);
                         normal = glm::normalize(normal);
                         normal = 0.5f * (normal + 1.0f);
                         normal_data->GetPixel(face, i, j, 0) = normal.x;
@@ -157,9 +157,9 @@ public:
         {// Light
             auto entity = scene.CreateEntity();
             auto light_comp = entity->AddComponent<DirectionalLightComponent>();
-            light_comp->data.color = glm::vec3(0.5, 0.7, 0.5);
-            light_comp->data.direction = glm::normalize(glm::vec3(0.0, -1.0, 0.0));
-            light_comp->data.irradiance = 10.0f;
+            light_comp->data.color = glm::vec3(1.0, 1.0, 1.0);
+            light_comp->data.direction = glm::normalize(glm::vec3(1.0, 0.0, 0.0));
+            light_comp->data.irradiance = 2.0f;
         }
         scene.OnAwake();
     }

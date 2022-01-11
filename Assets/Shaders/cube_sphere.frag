@@ -50,6 +50,9 @@ uniform DirectionalLight u_directionalLights[MAX_DIRECTIONAL_LIGHTS];
 uniform int u_nSpotLights;
 uniform SpotLight u_spotLights[MAX_SPOT_LIGHTS];
 
+uniform mat4 u_lightTransform;
+uniform sampler2D u_shadowBufferTexture;
+
 //////////////////////////////
 // PBR SURFACE MODEL
 //////////////////////////////
@@ -185,6 +188,36 @@ vec3 SpotLightReflectedRadiance(
     return L0 * A * l * f;
 }
 
+float DirectionalLightShadow(vec3 pos, vec3 normalDir, vec3 lightDir)
+{
+    vec4 lightSpacePos = u_lightTransform * vec4(pos, 1.0);
+
+    vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
+    projCoords = projCoords * 0.5 + 0.5;
+
+    float closestDepth = texture(u_shadowBufferTexture, projCoords.xy).r;
+    float currentDepth = projCoords.z;
+
+    float bias = max(0.001 * (1.0 - dot(normalDir, lightDir)), 0.002);
+
+    float shadow = 0.0;
+    vec2 texelSize = 1.0 / textureSize(u_shadowBufferTexture, 0);
+    for(int x = -1; x <= 1; ++x)
+    {
+        for(int y = -1; y <= 1; ++y)
+        {
+            float pcfDepth = texture(u_shadowBufferTexture, projCoords.xy + vec2(x, y) * texelSize).r; 
+            shadow += currentDepth - bias < pcfDepth  ? 1.0 : 0.0;        
+        }    
+    }
+    shadow /= 9.0;
+    
+    if(projCoords.z > 1.0)
+        shadow = 0.0;
+
+    return shadow;
+}
+
 
 //////////////////////////////
 // MATERIAL DATA
@@ -210,9 +243,9 @@ void main()
     PBRSurfaceData surface;
     surface.position = Pos;
     surface.normal = normal;
-    surface.albedo = vec3(1.0, 0.0, 0.0);//albedo;
+    surface.albedo = albedo;
     surface.metallic = 0.0;
-    surface.roughness = 0.1;
+    surface.roughness = 0.5;
     surface.roughness *= surface.roughness;
 
     // Accumulate lighting contributions
@@ -223,7 +256,8 @@ void main()
     }
     for (int i=0; i < u_nDirectionalLights; i++)
     {
-        result += DirectionalLightReflectedRadiance(u_directionalLights[i], surface);
+        float shadow = i==0 ? DirectionalLightShadow(surface.position, surface.normal, -u_directionalLights[i].direction) : 1.0;
+        result += shadow * DirectionalLightReflectedRadiance(u_directionalLights[i], surface);
     }
     for (int i = 0; i < u_nSpotLights; i++)
     {
@@ -236,5 +270,5 @@ void main()
     result = result / (result + vec3(1.0));
     result = pow(result, vec3(1.0/2.2)); 
 
-    FragColor = vec4(surface.normal, 1.0);
+    FragColor = vec4(result, 1.0);
 }
