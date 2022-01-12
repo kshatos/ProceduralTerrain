@@ -43,9 +43,9 @@ public:
             main_shader,
             BufferLayout{},
             std::vector<std::string>{
-                "u_albedo",
+            "u_albedo",
                 "u_normal"
-            }
+        }
         );
 
         int resolution = 512;
@@ -62,7 +62,7 @@ public:
                 {
                     for (int i = 0; i < heightmap_data->GetResolution(); ++i)
                     {
-                        auto point = heightmap_data->GetPixelCubePoint(face, i, j);
+                        auto point = CubemapData::CubePoint(heightmap_data->GetPixelCoordinates(face, i, j));
                         point = glm::normalize(point);
 
                         float ridge_noise = FractalRidgeNoise(point, 4.0f, 4, 0.7f, 2.0f);
@@ -94,16 +94,20 @@ public:
                         uint32_t jn = glm::min(j + 1, resolution - 1);
                         uint32_t js = glm::max(j - 1, 0);
 
-                        auto pe = glm::normalize(heightmap_data->GetPixelCubePoint(face, ie, j));
+                        auto pe = glm::normalize(
+                            CubemapData::CubePoint(heightmap_data->GetPixelCoordinates(face, ie, j)));
                         pe *= 1.0 + heightmap_data->GetPixel(face, ie, j, 0);
 
-                        auto pw = glm::normalize(heightmap_data->GetPixelCubePoint(face, iw, j));
+                        auto pw = glm::normalize(
+                            CubemapData::CubePoint(heightmap_data->GetPixelCoordinates(face, iw, j)));
                         pw *= 1.0 + heightmap_data->GetPixel(face, iw, j, 0);
 
-                        auto pn = glm::normalize(heightmap_data->GetPixelCubePoint(face, i, jn));
+                        auto pn = glm::normalize(
+                            CubemapData::CubePoint(heightmap_data->GetPixelCoordinates(face, i, jn)));
                         pn *= 1.0 + heightmap_data->GetPixel(face, i, jn, 0);
 
-                        auto ps = glm::normalize(heightmap_data->GetPixelCubePoint(face, i, js));
+                        auto ps = glm::normalize(
+                            CubemapData::CubePoint(heightmap_data->GetPixelCoordinates(face, i, js)));
                         ps *= 1.0 + heightmap_data->GetPixel(face, i, js, 0);
 
                         auto normal = -glm::cross(pe - pw, pn - ps);
