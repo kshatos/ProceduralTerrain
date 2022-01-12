@@ -6,6 +6,8 @@
 #include <thread>
 #include "cube_sphere.hpp"
 #include "noise3d.hpp"
+#include "erosion.hpp"
+
 
 using namespace Merlin;
 

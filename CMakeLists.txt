@@ -9,6 +9,8 @@ set(PROCEDURAL_TERRAIN_SOURCE
     ProceduralTerrain/cube_sphere.hpp
     ProceduralTerrain/noise3d.cpp
     ProceduralTerrain/noise3d.hpp
+    ProceduralTerrain/erosion.cpp
+    ProceduralTerrain/erosion.hpp
 )
 
 add_executable(ProceduralTerrain
