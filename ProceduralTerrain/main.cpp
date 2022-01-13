@@ -65,12 +65,12 @@ public:
                         auto point = CubemapData::CubePoint(heightmap_data->GetPixelCoordinates(face, i, j));
                         point = glm::normalize(point);
 
-                        float ridge_noise = FractalRidgeNoise(point, 4.0f, 4, 0.7f, 2.0f);
-                        float smooth_noise = FractalNoise(point, 1.0f, 4, 0.7f, 2.0f);
-                        float blend = 0.5f * (glm::simplex(3.0f * point) + 1.0f);
-                        float noise = blend * ridge_noise + (1.0 - blend) * smooth_noise;
+                        float ridge_noise = FractalRidgeNoise(point, 0.5f, 4, 0.7f, 2.0f);
+                        //float smooth_noise = FractalNoise(point, 1.0f, 4, 0.7f, 2.0f);
+                        //float blend = 0.5f * (glm::simplex(1.0f * point) + 1.0f);
+                        //float noise = blend * ridge_noise + (1.0 - blend) * smooth_noise;
 
-                        heightmap_data->GetPixel(face, i, j, 0) = 0.5 + 0.02 * noise;
+                        heightmap_data->GetPixel(face, i, j, 0) = 0.2 + 0.05 * ridge_noise;
                     }
                 }
             };
@@ -78,6 +78,9 @@ public:
         }
         for (auto& thread : threads)
             thread.join();
+
+        // Erosion
+
 
         // Calculate normal map
         threads.clear();

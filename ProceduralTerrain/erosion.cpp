@@ -1,6 +1,65 @@
+#include <glm/gtc/random.hpp>
 #include "erosion.hpp"
 #include "cube_sphere.hpp"
 
+
+void Deposit(
+    Merlin::CubemapData& heightmap,
+    glm::vec3 position,
+    glm::vec2 direction,
+    float amount)
+{
+    auto coordinates = CubemapData::PointCoordinates(position);
+    int resolution = heightmap.GetResolution();
+
+    int i0 = (int)(coordinates.u * resolution - 0.5);
+    int j0 = (int)(coordinates.v * resolution - 0.5);
+    int i1 = (int)(coordinates.u * resolution + 0.5);
+    int j1 = (int)(coordinates.v * resolution + 0.5);
+
+    i0 = glm::max(0, glm::min(i0, resolution - 1));
+    j0 = glm::max(0, glm::min(j0, resolution - 1));
+    i1 = glm::max(0, glm::min(i1, resolution - 1));
+    j1 = glm::max(0, glm::min(j1, resolution - 1));
+
+    glm::vec2 w = glm::abs(direction) / (glm::abs(direction.x) + glm::abs(direction.y));
+
+    float w00, w01, w10, w11 = 0.0f;
+
+    if (direction.x > 0.0f && direction.y > 0.0f)
+    {
+        w00 = amount * 0.5;
+        w10 = amount * 0.5 * w.y;
+        w11 = amount * 0.0;
+        w01 = amount * 0.5 * w.x;
+    }
+    else if (direction.x > 0.0f && direction.y < 0.0f)
+    {
+        w00 = amount * 0.5 * w.y;
+        w10 = amount * 0.0;
+        w11 = amount * 0.5 * w.x;
+        w01 = amount * 0.5;
+    }
+    else if (direction.x < 0.0f && direction.y > 0.0f)
+    {
+        w00 = amount * 0.5 * w.y;
+        w10 = amount * 0.5;
+        w11 = amount * 0.5 * w.x;
+        w01 = amount * 0.0;
+    }
+    else
+    {
+        w00 = amount * 0.0;
+        w10 = amount * 0.5 * w.x;
+        w11 = amount * 0.0;
+        w01 = amount * 0.5 * w.y;
+    }
+
+    heightmap.GetPixel(coordinates.face, i0, j0, 0) += w00;
+    heightmap.GetPixel(coordinates.face, i0, j1, 0) += w01;
+    heightmap.GetPixel(coordinates.face, i1, j0, 0) += w10;
+    heightmap.GetPixel(coordinates.face, i1, j1, 0) += w11;
+}
 
 void UpdateParticle(
     ErosionParticle& particle,
@@ -8,15 +67,17 @@ void UpdateParticle(
     const ErosionParameters& parameters)
 {
     // Evaluate local surface geometry
+    auto original_coordinates = CubemapData::PointCoordinates(particle.position);
     glm::vec3 sphere_normal = glm::normalize(particle.position);
     glm::vec3 eu = SphereHeightmapUTangent(particle.position, heightmap);
     glm::vec3 ev = SphereHeightmapVTangent(particle.position, heightmap);
-    glm::vec3 surface_normal = glm::cross(eu, ev);
+    glm::vec3 surface_normal = glm::normalize(glm::cross(eu, ev));
     glm::vec3 gravity_direction = (
         surface_normal - glm::dot(surface_normal, sphere_normal) * sphere_normal);
 
     // Calculate particle state variables
     glm::vec3 original_position = particle.position;
+    float original_altitude = BilinearInterpolate(heightmap, original_coordinates, 0);
     float spacing = 1.0f / heightmap.GetResolution();
     float speed = glm::length(particle.velocity);
     float soil_fraction_eq = glm::dot(particle.velocity, gravity_direction) * parameters.concentration_factor;
@@ -31,7 +92,13 @@ void UpdateParticle(
     // Calculate time derivatives
     glm::vec3 d_velocity = gravity_direction - particle.velocity / parameters.friction_time;
     float d_volume = -particle.volume / parameters.evaporation_time;
-    float d_concentration = (soil_fraction_eq - particle.soil_fraction) / parameters.erosion_time;
+    float d_fraction = (soil_fraction_eq - particle.soil_fraction) / parameters.erosion_time;
+
+    //
+    auto new_coordinates = CubemapData::PointCoordinates(particle.position);
+    auto new_altitude = BilinearInterpolate(heightmap, new_coordinates, 0);
+    auto travel_distance = glm::length(particle.position - original_position);
+    auto slope = (new_altitude - original_altitude) / (travel_distance + 1.0e-7f);
 
     // Update particle
     particle.velocity += timestep * d_velocity;
@@ -42,4 +109,26 @@ void UpdateParticle(
     particle.velocity -= glm::dot(particle.velocity, particle.position);
 
     // Deposit/Remove soil from heightmap
+    float grid_spacing = 1.0f / heightmap.GetResolution();
+    float d_soil_volume = (
+        particle.soil_fraction * d_volume +
+        particle.volume * d_fraction);
+    float d_height = -timestep * d_soil_volume / (grid_spacing * grid_spacing);
+    d_height = glm::min(d_height, 0.5f * slope * grid_spacing);
+    glm::vec2 grid_direction(
+        glm::dot(eu, particle.velocity),
+        glm::dot(ev, particle.velocity));
+    Deposit(heightmap, particle.position, grid_direction, d_height);
+}
+
+void InitializeParticle(
+    ErosionParticle& particle,
+    const ErosionParameters& parameters)
+{
+    particle.volume = parameters.particle_start_volume;
+    particle.soil_fraction = 0.0f;
+    particle.position = glm::normalize(glm::linearRand(
+        glm::vec3(-1.0f),
+        glm::vec3(+1.0f)));
+    particle.velocity = glm::vec3(0.0f);
 }

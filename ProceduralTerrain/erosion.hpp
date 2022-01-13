@@ -9,7 +9,6 @@ struct ErosionParameters
     float friction_time;
     float erosion_time;
     float evaporation_time;
-    float particle_height;
     float particle_start_volume;
     float concentration_factor;
 };
@@ -32,9 +31,19 @@ struct ErosionParticle
 };
 
 
+void Deposit(
+    Merlin::CubemapData& heightmap,
+    glm::vec3 position,
+    glm::vec2 direction,
+    float amount);
+
 void UpdateParticle(
     ErosionParticle& particle,
     Merlin::CubemapData& heightmap,
+    const ErosionParameters& parameters);
+
+void InitializeParticle(
+    ErosionParticle& particle,
     const ErosionParameters& parameters);
 
 #endif
