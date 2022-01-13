@@ -89,28 +89,14 @@ public:
                 {
                     for (int i = 0; i < heightmap_data->GetResolution(); ++i)
                     {
-                        uint32_t ie = glm::min(i + 1, resolution - 1);
-                        uint32_t iw = glm::max(i - 1, 0);
-                        uint32_t jn = glm::min(j + 1, resolution - 1);
-                        uint32_t js = glm::max(j - 1, 0);
+                        auto point = CubemapData::CubePoint(
+                            heightmap_data->GetPixelCoordinates(face, i, j));
+                        point = glm::normalize(point);
 
-                        auto pe = glm::normalize(
-                            CubemapData::CubePoint(heightmap_data->GetPixelCoordinates(face, ie, j)));
-                        pe *= 1.0 + heightmap_data->GetPixel(face, ie, j, 0);
+                        auto eu = SphereHeightmapUTangent(point, *heightmap_data);
+                        auto ev = SphereHeightmapVTangent(point, *heightmap_data);
 
-                        auto pw = glm::normalize(
-                            CubemapData::CubePoint(heightmap_data->GetPixelCoordinates(face, iw, j)));
-                        pw *= 1.0 + heightmap_data->GetPixel(face, iw, j, 0);
-
-                        auto pn = glm::normalize(
-                            CubemapData::CubePoint(heightmap_data->GetPixelCoordinates(face, i, jn)));
-                        pn *= 1.0 + heightmap_data->GetPixel(face, i, jn, 0);
-
-                        auto ps = glm::normalize(
-                            CubemapData::CubePoint(heightmap_data->GetPixelCoordinates(face, i, js)));
-                        ps *= 1.0 + heightmap_data->GetPixel(face, i, js, 0);
-
-                        auto normal = -glm::cross(pe - pw, pn - ps);
+                        auto normal = -glm::cross(eu, ev);
                         normal = glm::normalize(normal);
                         normal = 0.5f * (normal + 1.0f);
                         normal_data->GetPixel(face, i, j, 0) = normal.x;

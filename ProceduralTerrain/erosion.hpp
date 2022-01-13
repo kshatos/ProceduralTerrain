@@ -18,20 +18,23 @@ struct ErosionParameters
 struct ErosionParticle
 {
     glm::vec3 position;
-    glm::vec3 direction;
-    float speed;
+    glm::vec3 velocity;
     float volume;
     float soil_fraction;
 
     ErosionParticle() :
         position(glm::vec3(0.0f)),
-        direction(glm::vec3(0.0f)),
-        speed(0.0f),
+        velocity(glm::vec3(0.0f)),
         volume(0.0f),
         soil_fraction(0.0f)
     {
     }
 };
 
+
+void UpdateParticle(
+    ErosionParticle& particle,
+    Merlin::CubemapData& heightmap,
+    const ErosionParameters& parameters);
 
 #endif
