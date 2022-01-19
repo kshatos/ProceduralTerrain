@@ -42,9 +42,9 @@ void Deposit(
     }
     else if (direction.x < 0.0f && direction.y > 0.0f)
     {
-        w00 = amount * 0.5 * w.y;
+        w00 = amount * 0.5 * w.x;
         w10 = amount * 0.5;
-        w11 = amount * 0.5 * w.x;
+        w11 = amount * 0.5 * w.y;
         w01 = amount * 0.0;
     }
     else
@@ -87,38 +87,45 @@ void UpdateParticle(
     float timestep = 0.2f * parameters.friction_time;
     timestep = glm::min(timestep, 0.2f * parameters.erosion_time);
     timestep = glm::min(timestep, 0.2f * parameters.evaporation_time);
-    timestep = glm::min(timestep, speed + 1.0e-8f);
+    timestep = glm::min(timestep, spacing / (speed + 1.0e-8f));
 
     // Calculate time derivatives
     glm::vec3 d_velocity = gravity_direction - particle.velocity / parameters.friction_time;
     float d_volume = -particle.volume / parameters.evaporation_time;
     float d_fraction = (soil_fraction_eq - particle.soil_fraction) / parameters.erosion_time;
-
-    //
-    auto new_coordinates = CubemapData::PointCoordinates(particle.position);
-    auto new_altitude = BilinearInterpolate(heightmap, new_coordinates, 0);
-    auto travel_distance = glm::length(particle.position - original_position);
-    auto slope = (new_altitude - original_altitude) / (travel_distance + 1.0e-7f);
-
+    d_fraction = glm::max(d_fraction, -timestep * particle.soil_fraction);
+    
     // Update particle
     particle.velocity += timestep * d_velocity;
     particle.position += timestep * particle.velocity;
+    particle.volume += timestep * d_volume;
+    particle.soil_fraction += timestep * d_fraction;
 
     // Project movement variables back to sphere tangent frame
     particle.position = glm::normalize(particle.position);
     particle.velocity -= glm::dot(particle.velocity, particle.position);
 
+    //
+    auto new_coordinates = CubemapData::PointCoordinates(particle.position);
+    auto new_altitude = BilinearInterpolate(heightmap, new_coordinates, 0);
+    auto travel_distance = glm::length(particle.position - original_position);
+    auto slope = (new_altitude - original_altitude) / (timestep * speed);
+
     // Deposit/Remove soil from heightmap
-    float grid_spacing = 1.0f / heightmap.GetResolution();
     float d_soil_volume = (
         particle.soil_fraction * d_volume +
         particle.volume * d_fraction);
-    float d_height = -timestep * d_soil_volume / (grid_spacing * grid_spacing);
-    d_height = glm::min(d_height, 0.5f * slope * grid_spacing);
+    float d_height = -timestep * d_soil_volume / (spacing * spacing);
+    d_height = glm::min(d_height, 0.5f * slope * spacing);
     glm::vec2 grid_direction(
         glm::dot(eu, particle.velocity),
         glm::dot(ev, particle.velocity));
     Deposit(heightmap, particle.position, grid_direction, d_height);
+
+    // Reset Particles
+    bool needs_reset = (particle.volume < 1.0e-3 * parameters.particle_start_volume);
+    if (needs_reset)
+        InitializeParticle(particle, parameters);
 }
 
 void InitializeParticle(

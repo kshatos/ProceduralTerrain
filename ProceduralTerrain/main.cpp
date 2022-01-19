@@ -80,7 +80,20 @@ public:
             thread.join();
 
         // Erosion
+        float grid_spacing = 1.0f / heightmap_data->GetResolution();
+        ErosionParameters erosion_params;
+        erosion_params.concentration_factor = 1.0f;
+        erosion_params.erosion_time = 0.25f;
+        erosion_params.evaporation_time = 0.5f;
+        erosion_params.friction_time = 1.0;
+        erosion_params.particle_start_volume = 0.4f * grid_spacing * grid_spacing;
 
+        int n_particles = 1000;
+        std::vector<ErosionParticle> particles(n_particles);
+        for (auto& p : particles) { InitializeParticle(p, erosion_params); }
+        for (int i = 0; i < 2000; ++i)
+            for (auto& p : particles)
+                UpdateParticle(p, *heightmap_data, erosion_params);
 
         // Calculate normal map
         threads.clear();
