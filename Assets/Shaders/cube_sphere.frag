@@ -270,5 +270,5 @@ void main()
     result = result / (result + vec3(1.0));
     result = pow(result, vec3(1.0/2.2)); 
 
-    FragColor = vec4(0.5 * (surface.normal + 1.0), 1.0);
+    FragColor = vec4(result, 1.0);
 }

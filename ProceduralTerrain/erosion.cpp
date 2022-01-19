@@ -75,7 +75,7 @@ void UpdateParticle(
     glm::vec3 sphere_normal = glm::normalize(original_position);
     glm::vec3 eu = SphereHeightmapUTangent(original_position, heightmap);
     glm::vec3 ev = SphereHeightmapVTangent(original_position, heightmap);
-    glm::vec3 surface_normal = glm::normalize(glm::cross(eu, ev));
+    glm::vec3 surface_normal = glm::normalize(-glm::cross(eu, ev)); // Cubemap uses LH coordinates!!!
     glm::vec3 gravity_direction = (
         surface_normal - glm::dot(surface_normal, sphere_normal) * sphere_normal);
     glm::vec2 grid_direction(
@@ -114,14 +114,17 @@ void UpdateParticle(
     auto new_coordinates = CubemapData::PointCoordinates(particle.position);
     auto new_altitude = BilinearInterpolate(heightmap, new_coordinates, 0);
     auto travel_distance = glm::length(particle.position - original_position);
-    auto slope = speed > 0.0 ? (new_altitude - original_altitude) / (timestep * speed) : 0.0f;
+    auto slope = (new_altitude - original_altitude) / (speed * timestep);
 
     // Deposit/Remove soil from heightmap
     float d_soil_volume = (
         particle.soil_fraction * d_volume +
         particle.volume * d_fraction);
     float d_height = -timestep * d_soil_volume / (spacing * spacing);
-    d_height = glm::min(d_height, 0.5f * slope * spacing);
+    d_height = (
+        slope > 0.0 ?
+        glm::min(d_height, 0.9f * slope * spacing) :
+        glm::max(d_height, 0.9f * slope * spacing));
     Deposit(heightmap, particle.position, grid_direction, d_height);
 
     // Reset Particles

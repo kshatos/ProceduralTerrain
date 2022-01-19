@@ -84,12 +84,12 @@ public:
                         auto point = CubemapData::CubePoint(heightmap_data->GetPixelCoordinates(face, i, j));
                         point = glm::normalize(point);
 
-                        float ridge_noise = FractalRidgeNoise(point, 0.5f, 4, 0.7f, 2.0f);
-                        //float smooth_noise = FractalNoise(point, 1.0f, 4, 0.7f, 2.0f);
-                        //float blend = 0.5f * (glm::simplex(1.0f * point) + 1.0f);
-                        //float noise = blend * ridge_noise + (1.0 - blend) * smooth_noise;
+                        float ridge_noise = 1.00f * FractalRidgeNoise(point, 2.0f, 4, 0.5f, 2.0f);
+                        float smooth_noise = 0.0f * FractalNoise(point, 4.0f, 4, 0.7f, 2.0f);
+                        float blend = 0.5f * (glm::simplex(1.0f * point) + 1.0f);
+                        float noise = blend * ridge_noise + (1.0 - blend) * smooth_noise;
 
-                        heightmap_data->GetPixel(face, i, j, 0) = 0.2 + 0.05 * ridge_noise;
+                        heightmap_data->GetPixel(face, i, j, 0) = 0.2 + 0.1 * noise;
                     }
                 }
             };
@@ -101,19 +101,46 @@ public:
         // Erosion
         float grid_spacing = 1.0f / heightmap_data->GetResolution();
         ErosionParameters erosion_params;
-        erosion_params.concentration_factor = 1.0f;
-        erosion_params.erosion_time = 0.25f;
-        erosion_params.evaporation_time = 0.5f;
-        erosion_params.friction_time = 1.0;
-        erosion_params.particle_start_volume = 0.4f * grid_spacing * grid_spacing;
+        erosion_params.concentration_factor = 3.0f;
+        erosion_params.erosion_time = 0.5f;
+        erosion_params.evaporation_time = 1.0f;
+        erosion_params.friction_time = 0.5;
+        erosion_params.particle_start_volume = 0.8f * grid_spacing * grid_spacing;
 
         int n_particles = 1000;
-        int n_steps = 8000;
+        int n_steps = 20000;
         std::vector<ErosionParticle> particles(n_particles);
         for (auto& p : particles) { InitializeParticle(p, erosion_params); }
         for (int i = 0; i < n_steps; ++i)
             for (auto& p : particles)
                 UpdateParticle(p, *heightmap_data, erosion_params);
+
+        // Smooth to remove high frequency noise from erosion
+        threads.clear();
+        for (int face_id = CubeFace::Begin; face_id < CubeFace::End; face_id++)
+        {
+            auto work = [face_id, heightmap_data]() {
+                auto face = static_cast<CubeFace>(face_id);
+                for (int k = 0; k < 1; ++k)
+                {
+                    for (int j = 1; j < heightmap_data->GetResolution() - 1; ++j)
+                    {
+                        for (int i = 1; i < heightmap_data->GetResolution() - 1; ++i)
+                        {
+                            float average = 0.25f * (
+                                heightmap_data->GetPixel(face, i + 1, j, 0) +
+                                heightmap_data->GetPixel(face, i - 1, j, 0) +
+                                heightmap_data->GetPixel(face, i, j + 1, 0) +
+                                heightmap_data->GetPixel(face, i, j - 1, 0));
+                            heightmap_data->GetPixel(face, i, j, 0) = average;
+                        }
+                    }
+                }
+            };
+            threads.emplace_back(work);
+        }
+        for (auto& thread : threads)
+            thread.join();
 
         // Calculate normal map
         threads.clear();
