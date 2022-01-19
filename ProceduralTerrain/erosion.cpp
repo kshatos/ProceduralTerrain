@@ -22,7 +22,9 @@ void Deposit(
     i1 = glm::max(0, glm::min(i1, resolution - 1));
     j1 = glm::max(0, glm::min(j1, resolution - 1));
 
-    glm::vec2 w = glm::abs(direction) / (glm::abs(direction.x) + glm::abs(direction.y));
+    float dir_mag = glm::abs(direction.x) + glm::abs(direction.y);
+    dir_mag = dir_mag > 0.0 ? dir_mag : 1.0f;
+    glm::vec2 w = glm::abs(direction) / dir_mag;
 
     float w00, w01, w10, w11 = 0.0f;
 
@@ -67,17 +69,20 @@ void UpdateParticle(
     const ErosionParameters& parameters)
 {
     // Evaluate local surface geometry
-    auto original_coordinates = CubemapData::PointCoordinates(particle.position);
-    glm::vec3 sphere_normal = glm::normalize(particle.position);
-    glm::vec3 eu = SphereHeightmapUTangent(particle.position, heightmap);
-    glm::vec3 ev = SphereHeightmapVTangent(particle.position, heightmap);
+    glm::vec3 original_position = particle.position;
+    auto original_coordinates = CubemapData::PointCoordinates(original_position);
+    float original_altitude = BilinearInterpolate(heightmap, original_coordinates, 0);
+    glm::vec3 sphere_normal = glm::normalize(original_position);
+    glm::vec3 eu = SphereHeightmapUTangent(original_position, heightmap);
+    glm::vec3 ev = SphereHeightmapVTangent(original_position, heightmap);
     glm::vec3 surface_normal = glm::normalize(glm::cross(eu, ev));
     glm::vec3 gravity_direction = (
         surface_normal - glm::dot(surface_normal, sphere_normal) * sphere_normal);
+    glm::vec2 grid_direction(
+        glm::dot(eu, particle.velocity),
+        glm::dot(ev, particle.velocity));
 
     // Calculate particle state variables
-    glm::vec3 original_position = particle.position;
-    float original_altitude = BilinearInterpolate(heightmap, original_coordinates, 0);
     float spacing = 1.0f / heightmap.GetResolution();
     float speed = glm::length(particle.velocity);
     float soil_fraction_eq = glm::dot(particle.velocity, gravity_direction) * parameters.concentration_factor;
@@ -94,7 +99,7 @@ void UpdateParticle(
     float d_volume = -particle.volume / parameters.evaporation_time;
     float d_fraction = (soil_fraction_eq - particle.soil_fraction) / parameters.erosion_time;
     d_fraction = glm::max(d_fraction, -timestep * particle.soil_fraction);
-    
+
     // Update particle
     particle.velocity += timestep * d_velocity;
     particle.position += timestep * particle.velocity;
@@ -103,13 +108,13 @@ void UpdateParticle(
 
     // Project movement variables back to sphere tangent frame
     particle.position = glm::normalize(particle.position);
-    particle.velocity -= glm::dot(particle.velocity, particle.position);
+    particle.velocity -= glm::dot(particle.velocity, particle.position) * particle.position;
 
     //
     auto new_coordinates = CubemapData::PointCoordinates(particle.position);
     auto new_altitude = BilinearInterpolate(heightmap, new_coordinates, 0);
     auto travel_distance = glm::length(particle.position - original_position);
-    auto slope = (new_altitude - original_altitude) / (timestep * speed);
+    auto slope = speed > 0.0 ? (new_altitude - original_altitude) / (timestep * speed) : 0.0f;
 
     // Deposit/Remove soil from heightmap
     float d_soil_volume = (
@@ -117,15 +122,14 @@ void UpdateParticle(
         particle.volume * d_fraction);
     float d_height = -timestep * d_soil_volume / (spacing * spacing);
     d_height = glm::min(d_height, 0.5f * slope * spacing);
-    glm::vec2 grid_direction(
-        glm::dot(eu, particle.velocity),
-        glm::dot(ev, particle.velocity));
     Deposit(heightmap, particle.position, grid_direction, d_height);
 
     // Reset Particles
     bool needs_reset = (particle.volume < 1.0e-3 * parameters.particle_start_volume);
     if (needs_reset)
         InitializeParticle(particle, parameters);
+
+
 }
 
 void InitializeParticle(

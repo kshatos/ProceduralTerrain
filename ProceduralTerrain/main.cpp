@@ -4,6 +4,7 @@
 #include <backends/imgui_impl_opengl3.h>
 #include <imgui.h>
 #include <thread>
+#include <fstream>
 #include "cube_sphere.hpp"
 #include "noise3d.hpp"
 #include "erosion.hpp"
@@ -11,6 +12,24 @@
 
 using namespace Merlin;
 
+
+void DumpData(
+    std::vector<ErosionParticle> data,
+    std::string filename)
+{
+    std::ofstream file;
+    file.open(filename);
+    for (auto& item : data)
+    {
+        std::string line = (
+            std::to_string(item.position.x) + ", " +
+            std::to_string(item.position.y) + ", " +
+            std::to_string(item.position.z));
+
+        file << line << std::endl;
+    }
+    file.close();
+}
 
 class SceneLayer : public Layer
 {
@@ -89,9 +108,10 @@ public:
         erosion_params.particle_start_volume = 0.4f * grid_spacing * grid_spacing;
 
         int n_particles = 1000;
+        int n_steps = 8000;
         std::vector<ErosionParticle> particles(n_particles);
         for (auto& p : particles) { InitializeParticle(p, erosion_params); }
-        for (int i = 0; i < 2000; ++i)
+        for (int i = 0; i < n_steps; ++i)
             for (auto& p : particles)
                 UpdateParticle(p, *heightmap_data, erosion_params);
 
