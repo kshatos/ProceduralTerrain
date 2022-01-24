@@ -1,35 +1,9 @@
 #include "cube_sphere.hpp"
-#include "Merlin/Render/cubemap.hpp"
 
-
-glm::vec3 FaceToCube(
-    const CubeFace& face,
-    const float& u,
-    const float& v)
-{
-    float uc = 2.0f * u - 1.0f;
-    float vc = 2.0f * v - 1.0f;
-    switch (face)
-    {
-    case PositiveX:
-        return glm::vec3(+1.0f, -vc, -uc);
-    case NegativeX:
-        return glm::vec3(-1.0f, -vc, +uc);
-    case PositiveY:
-        return glm::vec3(+uc, +1.0f, +vc);
-    case NegativeY:
-        return glm::vec3(+uc, -1.0f, -vc);
-    case PositiveZ:
-        return glm::vec3(+uc, -vc, +1.0f);
-    case NegativeZ:
-        return glm::vec3(-uc, -vc, -1.0f);
-    default:
-        return glm::vec3(0.0);
-    }
-}
 
 glm::vec3 CubeToSphere(const glm::vec3& p)
 {
+    /*
     auto x2 = p.x * p.x;
     auto y2 = p.y * p.y;
     auto z2 = p.z * p.z;
@@ -37,55 +11,70 @@ glm::vec3 CubeToSphere(const glm::vec3& p)
     auto x = p.x * glm::sqrt(1.0f - (y2 + z2) / 2 + (y2 * z2) / 3);
     auto y = p.y * glm::sqrt(1.0f - (z2 + x2) / 2 + (z2 * x2) / 3);
     auto z = p.z * glm::sqrt(1.0f - (x2 + y2) / 2 + (x2 * y2) / 3);
-
+    
     return glm::vec3(x, y, z);
+    */
+    return glm::normalize(p);
 }
 
-glm::vec2 FaceUVToCubemapUV(
-    const CubeFace& face,
-    const float& u,
-    const float& v)
+glm::vec3 SphereToCube(const glm::vec3& p)
 {
-    glm::vec2 uv;
-    switch (face)
-    {
-    case CubeFace::PositiveX:
-        uv = glm::vec2(
-            (2.0f + u) / 4.0f,
-            (1.0f + v) / 3.0f);
-        break;
-    case CubeFace::NegativeX:
-        uv = glm::vec2(
-            (0.0f + u) / 4.0f,
-            (1.0f + v) / 3.0f);
-        break;
-    case CubeFace::PositiveY:
-        uv = glm::vec2(
-            (1.0f + u) / 4.0f,
-            (2.0f + v) / 3.0f);
-        break;
-    case CubeFace::NegativeY:
-        uv = glm::vec2(
-            (1.0f + u) / 4.0f,
-            (0.0f + v) / 3.0f);
-        break;
-    case CubeFace::PositiveZ:
-        uv = glm::vec2(
-            (3.0f + u) / 4.0f,
-            (1.0f + v) / 3.0f);
-        break;
-    case CubeFace::NegativeZ:
-        uv = glm::vec2(
-            (1.0f + u) / 4.0f,
-            (1.0f + v) / 3.0f);
-        break;
-    default:
-        uv = glm::vec2();
-        break;
-    }
-    return glm::vec2(
-        glm::clamp(uv.x, 0.0f, 1.0f),
-        glm::clamp(uv.y, 0.0f, 1.0f));
+    float max = glm::abs(p.x);
+    max = glm::max(glm::abs(p.y), max);
+    max = glm::max(glm::abs(p.z), max);
+    return p / max;
+}
+
+glm::vec3 SphereHeightmapPoint(
+    glm::vec3 direction,
+    CubemapData& heightmap)
+{
+    auto coordinates = CubemapData::PointCoordinates(direction);
+    auto height = BilinearInterpolate(heightmap, coordinates, 0);
+    return direction * (1.0f + height);
+}
+
+glm::vec3 SphereHeightmapPoint(
+    CubemapCoordinates coordinates,
+    CubemapData& heightmap)
+{
+    auto direction = CubeToSphere(CubemapData::CubePoint(coordinates));
+    auto height = BilinearInterpolate(heightmap, coordinates, 0);
+    return direction * (1.0f + height);
+}
+
+glm::vec3 SphereHeightmapUTangent(
+    glm::vec3 direction,
+    CubemapData& heightmap)
+{
+    float step = 1.0f / heightmap.GetResolution();
+
+    auto coordinates = CubemapData::PointCoordinates(direction);
+    auto p0 =  SphereHeightmapPoint(coordinates, heightmap);
+
+    coordinates.u += step;
+    auto p1 = SphereHeightmapPoint(coordinates, heightmap);
+
+    auto tangent = (p1 - p0) / step;
+
+    return tangent;
+}
+
+glm::vec3 SphereHeightmapVTangent(
+    glm::vec3 direction,
+    CubemapData& heightmap)
+{
+    float step = 1.0f / heightmap.GetResolution();
+
+    auto coordinates = CubemapData::PointCoordinates(direction);
+    auto p0 = SphereHeightmapPoint(coordinates, heightmap);
+
+    coordinates.v += step;
+    auto p1 = SphereHeightmapPoint(coordinates, heightmap);
+
+    auto tangent = (p1 - p0) / step;
+
+    return tangent;
 }
 
 std::shared_ptr<Mesh<Vertex_XNTBUV>> BuildSphereMesh(int n_face_divisions)
@@ -116,7 +105,9 @@ std::shared_ptr<Mesh<Vertex_XNTBUV>> BuildSphereMesh(int n_face_divisions)
 
                 // Vertex
                 auto& vertex = mesh->GetVertex(vertex_index);
-                vertex.position = CubeToSphere(FaceToCube(face, face_u, face_v));
+                vertex.position = CubeToSphere(
+                    CubemapData::CubePoint(
+                        CubemapCoordinates{ face, face_u, face_v }));
                 vertex.normal = glm::normalize(vertex.position);
                 vertex.uv = glm::vec2(face_u, face_v);
 

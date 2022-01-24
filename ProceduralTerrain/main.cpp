@@ -4,11 +4,32 @@
 #include <backends/imgui_impl_opengl3.h>
 #include <imgui.h>
 #include <thread>
+#include <fstream>
 #include "cube_sphere.hpp"
 #include "noise3d.hpp"
+#include "erosion.hpp"
+
 
 using namespace Merlin;
 
+
+void DumpData(
+    std::vector<ErosionParticle> data,
+    std::string filename)
+{
+    std::ofstream file;
+    file.open(filename);
+    for (auto& item : data)
+    {
+        std::string line = (
+            std::to_string(item.position.x) + ", " +
+            std::to_string(item.position.y) + ", " +
+            std::to_string(item.position.z));
+
+        file << line << std::endl;
+    }
+    file.close();
+}
 
 class SceneLayer : public Layer
 {
@@ -41,9 +62,9 @@ public:
             main_shader,
             BufferLayout{},
             std::vector<std::string>{
-                "u_albedo",
+            "u_albedo",
                 "u_normal"
-            }
+        }
         );
 
         int resolution = 512;
@@ -60,15 +81,59 @@ public:
                 {
                     for (int i = 0; i < heightmap_data->GetResolution(); ++i)
                     {
-                        auto point = heightmap_data->GetPixelCubePoint(face, i, j);
+                        auto point = CubemapData::CubePoint(heightmap_data->GetPixelCoordinates(face, i, j));
                         point = glm::normalize(point);
 
-                        float ridge_noise = FractalRidgeNoise(point, 4.0f, 4, 0.7f, 2.0f);
-                        float smooth_noise = FractalNoise(point, 1.0f, 4, 0.7f, 2.0f);
-                        float blend = 0.5f * (glm::simplex(3.0f * point) + 1.0f);
+                        float ridge_noise = 1.00f * FractalRidgeNoise(point, 2.0f, 4, 0.5f, 2.0f);
+                        float smooth_noise = 0.0f * FractalNoise(point, 4.0f, 4, 0.7f, 2.0f);
+                        float blend = 0.5f * (glm::simplex(1.0f * point) + 1.0f);
                         float noise = blend * ridge_noise + (1.0 - blend) * smooth_noise;
 
-                        heightmap_data->GetPixel(face, i, j, 0) = 0.5 + 0.02 * noise;
+                        heightmap_data->GetPixel(face, i, j, 0) = 0.2 + 0.1 * noise;
+                    }
+                }
+            };
+            threads.emplace_back(work);
+        }
+        for (auto& thread : threads)
+            thread.join();
+
+        // Erosion
+        float grid_spacing = 1.0f / heightmap_data->GetResolution();
+        ErosionParameters erosion_params;
+        erosion_params.concentration_factor = 3.0f;
+        erosion_params.erosion_time = 0.5f;
+        erosion_params.evaporation_time = 1.0f;
+        erosion_params.friction_time = 0.5;
+        erosion_params.particle_start_volume = 0.8f * grid_spacing * grid_spacing;
+
+        int n_particles = 1000;
+        int n_steps = 20000;
+        std::vector<ErosionParticle> particles(n_particles);
+        for (auto& p : particles) { InitializeParticle(p, erosion_params); }
+        for (int i = 0; i < n_steps; ++i)
+            for (auto& p : particles)
+                UpdateParticle(p, *heightmap_data, erosion_params);
+
+        // Smooth to remove high frequency noise from erosion
+        threads.clear();
+        for (int face_id = CubeFace::Begin; face_id < CubeFace::End; face_id++)
+        {
+            auto work = [face_id, heightmap_data]() {
+                auto face = static_cast<CubeFace>(face_id);
+                for (int k = 0; k < 1; ++k)
+                {
+                    for (int j = 1; j < heightmap_data->GetResolution() - 1; ++j)
+                    {
+                        for (int i = 1; i < heightmap_data->GetResolution() - 1; ++i)
+                        {
+                            float average = 0.25f * (
+                                heightmap_data->GetPixel(face, i + 1, j, 0) +
+                                heightmap_data->GetPixel(face, i - 1, j, 0) +
+                                heightmap_data->GetPixel(face, i, j + 1, 0) +
+                                heightmap_data->GetPixel(face, i, j - 1, 0));
+                            heightmap_data->GetPixel(face, i, j, 0) = average;
+                        }
                     }
                 }
             };
@@ -87,24 +152,14 @@ public:
                 {
                     for (int i = 0; i < heightmap_data->GetResolution(); ++i)
                     {
-                        uint32_t ie = glm::min(i + 1, resolution - 1);
-                        uint32_t iw = glm::max(i - 1, 0);
-                        uint32_t jn = glm::min(j + 1, resolution - 1);
-                        uint32_t js = glm::max(j - 1, 0);
+                        auto point = CubemapData::CubePoint(
+                            heightmap_data->GetPixelCoordinates(face, i, j));
+                        point = glm::normalize(point);
 
-                        auto pe = glm::normalize(heightmap_data->GetPixelCubePoint(face, ie, j));
-                        pe *= 1.0 + heightmap_data->GetPixel(face, ie, j, 0);
+                        auto eu = SphereHeightmapUTangent(point, *heightmap_data);
+                        auto ev = SphereHeightmapVTangent(point, *heightmap_data);
 
-                        auto pw = glm::normalize(heightmap_data->GetPixelCubePoint(face, iw, j));
-                        pw *= 1.0 + heightmap_data->GetPixel(face, iw, j, 0);
-
-                        auto pn = glm::normalize(heightmap_data->GetPixelCubePoint(face, i, jn));
-                        pn *= 1.0 + heightmap_data->GetPixel(face, i, jn, 0);
-
-                        auto ps = glm::normalize(heightmap_data->GetPixelCubePoint(face, i, js));
-                        ps *= 1.0 + heightmap_data->GetPixel(face, i, js, 0);
-
-                        auto normal = -glm::cross(pe - pw, pn - ps);
+                        auto normal = -glm::cross(eu, ev);
                         normal = glm::normalize(normal);
                         normal = 0.5f * (normal + 1.0f);
                         normal_data->GetPixel(face, i, j, 0) = normal.x;
