@@ -222,8 +222,11 @@ float DirectionalLightShadow(vec3 pos, vec3 normalDir, vec3 lightDir)
 //////////////////////////////
 // MATERIAL DATA
 //////////////////////////////
-uniform samplerCube u_albedo;
 uniform samplerCube u_normal;
+uniform samplerCube u_splatmap;
+uniform sampler2D u_terrain_textures[4];
+
+uniform float u_terrain_texture_scales[4];
 
 in vec3 Pos;
 in vec3 Normal;
@@ -233,19 +236,79 @@ in vec2 TexCoord;
 out vec4 FragColor;
 
 
+//////////////////////////////
+// SPLAT MAPPING
+//////////////////////////////
+vec4 SampleTriplanar(
+    sampler2D tex,
+    vec2 xy,
+    vec2 yz,
+    vec2 zx,
+    vec3 normal)
+{
+    vec4 xy_sample = pow(texture(tex, xy), vec4(2.2));
+    vec4 yz_sample = pow(texture(tex, yz), vec4(2.2));
+    vec4 zx_sample = pow(texture(tex, zx), vec4(2.2));
+    
+    vec3 weights = abs(normal);
+    weights /= (weights.x + weights.y + weights.z);
+
+    return (
+        weights.x * yz_sample +
+        weights.y * zx_sample +
+        weights.z * xy_sample);
+}
+
+
+vec4 SampleTerrain(vec3 position, vec3 normal)
+{
+    vec4 splat_weights = texture(u_splatmap, Pos);
+
+    vec2 xy = Pos.xy;
+    vec2 yz = Pos.yz;
+    vec2 zx = Pos.zx;
+
+    float scale = u_terrain_texture_scales[0];
+    vec4 sample0 = SampleTriplanar(
+        u_terrain_textures[0], scale*xy, scale*yz, scale*zx, normal);
+
+    scale = u_terrain_texture_scales[1];
+    vec4 sample1 = SampleTriplanar(
+        u_terrain_textures[1], scale*xy, scale*yz, scale*zx, normal);
+        
+    scale = u_terrain_texture_scales[2];
+    vec4 sample2 = SampleTriplanar(
+        u_terrain_textures[2], scale*xy, scale*yz, scale*zx, normal);
+    
+    scale = u_terrain_texture_scales[3];
+    vec4 sample3 = SampleTriplanar(
+        u_terrain_textures[3], scale*xy, scale*yz, scale*zx, normal);
+
+    return (
+        sample0 * splat_weights.x +
+        sample1 * splat_weights.y +
+        sample2 * splat_weights.z +
+        sample3 * splat_weights.w);
+}
+
+
+//////////////////////////////
+// MAIN
+//////////////////////////////
 void main()
 {
     vec3 normal = texture(u_normal, Pos).xyz;
     normal  = normal * 2.0 - 1.0;
     normal = normalize(normal);
-    vec3 albedo = texture(u_albedo, Pos).xyz;
+
+    vec3 albedo = SampleTerrain(Pos, normal).xyz;
 
     PBRSurfaceData surface;
     surface.position = Pos;
     surface.normal = normal;
     surface.albedo = albedo;
     surface.metallic = 0.0;
-    surface.roughness = 0.5;
+    surface.roughness = 0.8;
     surface.roughness *= surface.roughness;
 
     // Accumulate lighting contributions
@@ -269,6 +332,7 @@ void main()
     // HDR Tonemap and gamma correction
     result = result / (result + vec3(1.0));
     result = pow(result, vec3(1.0/2.2)); 
+
 
     FragColor = vec4(result, 1.0);
 }
