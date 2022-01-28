@@ -64,21 +64,21 @@ public:
                 TextureFilterMode::Linear));
 
         auto grass_tex = Texture2D::Create(
-            ".\\CustomAssets\\Textures\\HITW_Terrain-Textures-Set\\HITW-TS2-grass-yellow.jpg",
+            ".\\CustomAssets\\Textures\\HITW_Terrain-Textures-Set\\HITW-TS2-range-shrub-grass-green.jpg",
             Texture2DProperties(
                 TextureWrapMode::Repeat,
                 TextureWrapMode::Repeat,
                 TextureFilterMode::Linear));
 
         auto forest_tex = Texture2D::Create(
-            ".\\CustomAssets\\Textures\\HITW_Terrain-Textures-Set\\HITW-TS2-forest-evergreen-bareground-2.jpg",
+            ".\\CustomAssets\\Textures\\HITW_Terrain-Textures-Set\\HITW-TS2-forest-dark-grass-green.jpg",
             Texture2DProperties(
                 TextureWrapMode::Repeat,
                 TextureWrapMode::Repeat,
                 TextureFilterMode::Linear));
 
         auto barren_tex = Texture2D::Create(
-            ".\\CustomAssets\\Textures\\HITW_Terrain-Textures-Set\\HITW-TS2-bare-ground-2.jpg",
+            ".\\CustomAssets\\Textures\\HITW_Terrain-Textures-Set\\HITW-TS2-range-shrub-red-desert.jpg",
             Texture2DProperties(
                 TextureWrapMode::Repeat,
                 TextureWrapMode::Repeat,
@@ -107,9 +107,9 @@ public:
         }
         );
         main_material->SetTexture("u_terrain_textures[0]", mountain_tex);
-        main_material->SetTexture("u_terrain_textures[1]", grass_tex);
-        main_material->SetTexture("u_terrain_textures[2]", forest_tex);
-        main_material->SetTexture("u_terrain_textures[3]", barren_tex);
+        main_material->SetTexture("u_terrain_textures[1]", barren_tex);
+        main_material->SetTexture("u_terrain_textures[2]", grass_tex);
+        main_material->SetTexture("u_terrain_textures[3]", forest_tex);
 
         int resolution = 512;
         float spacing = 1.0f / resolution;
@@ -223,7 +223,7 @@ public:
         threads.clear();
         for (int face_id = CubeFace::Begin; face_id < CubeFace::End; face_id++)
         {
-            auto work = [face_id, splatmap_data]() {
+            auto work = [face_id, splatmap_data, heightmap_data]() {
                 auto face = static_cast<CubeFace>(face_id);
                 for (int j = 0; j < splatmap_data->GetResolution(); ++j)
                 {
@@ -232,20 +232,58 @@ public:
                         auto point = CubemapData::CubePoint(splatmap_data->GetPixelCoordinates(face, i, j));
                         point = glm::normalize(point);
 
-                        glm::vec4 weights;
-                        weights.x = 0.5f * (SmoothNoise(point + glm::vec3(10.0, 0.0, 0.0)) + 1.0f);
-                        weights.y = 0.5f * (SmoothNoise(point + glm::vec3(0.0, 15.0, 0.0)) + 1.0f);
-                        weights.z = 0.5f * (SmoothNoise(point + glm::vec3(0.0, 0.0, 8.0)) + 1.0f);
-                        weights.w = 0.5f * (SmoothNoise(point + glm::vec3(3.0, 7.0, 16.0)) + 1.0f);
-                        weights = glm::abs(weights);
+                        float cosT = glm::dot(point, glm::vec3(0.0, 1.0, 0.0));
+                        float T = glm::acos(cosT);
+                        float sin2T = glm::sin(2.0f * T);
 
-                        weights = glm::pow(weights, glm::vec4(4.0f));
-                        weights /= (weights.x + weights.y + weights.z + weights.w);
+                        float temperature = 1.0f - cosT* cosT;
+                        temperature += 0.1f * SmoothNoise(5.0f * point + glm::vec3(0.0, 15.0, 0.0));
+                        temperature = glm::clamp(temperature, 0.0f, 1.0f);
 
-                        splatmap_data->GetPixel(face, i, j, 0) = weights.x;
-                        splatmap_data->GetPixel(face, i, j, 1) = weights.y;
-                        splatmap_data->GetPixel(face, i, j, 2) = weights.z;
-                        splatmap_data->GetPixel(face, i, j, 3) = weights.w;
+
+                        float rainfall = sin2T * sin2T;
+                        rainfall += 0.4f * SmoothNoise(3.0f * point + glm::vec3(0.0, 15.0, 0.0));
+                        rainfall = glm::clamp(rainfall, 0.0f, 1.0f);
+
+                        float tundra = glm::clamp(0.5f - (temperature - 0.3f) / 0.1f, 0.0f, 1.0f);
+
+                        float shrub = (1.0f - tundra);
+                        float grass = (1.0f - tundra);
+                        float forest = (1.0f - tundra);
+                        if (rainfall < 0.1)
+                        {
+                            grass *= 0.0f;
+                            forest *= 0.0f;
+                        }
+                        else if (rainfall < 0.3)
+                        {
+                            float blend = 0.5f - (rainfall - 0.2f) / (2.0f * 0.1f);
+                            shrub *= blend;
+                            grass *= (1.0 - blend);
+                            forest *= 0.0;
+                        }
+                        else if (rainfall < 0.5)
+                        {
+                            shrub *= 0.0f;
+                            forest *= 0.0f;
+                        }
+                        else if (rainfall < 0.7f)
+                        {
+                            float blend = 0.5f - (rainfall - 0.6f) / (2.0f * 0.1f);
+                            shrub *= 0.0f;
+                            grass *= blend;
+                            forest *= (1.0 - blend);
+                        }
+                        else
+                        {
+                            shrub *= 0.0f;
+                            grass *= 0.0f;
+                        }
+
+                        splatmap_data->GetPixel(face, i, j, 0) = tundra;
+                        splatmap_data->GetPixel(face, i, j, 1) = shrub;
+                        splatmap_data->GetPixel(face, i, j, 2) = grass;
+                        splatmap_data->GetPixel(face, i, j, 3) = forest;
                     }
                 }
             };
