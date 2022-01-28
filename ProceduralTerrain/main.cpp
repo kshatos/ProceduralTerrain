@@ -43,7 +43,7 @@ class SceneLayer : public Layer
     std::shared_ptr<Mesh<Vertex_XNTBUV>> mesh;
     GameScene scene;
 
-    float texture_scales[4]{ 1.0f, 1.0f, 1.0f, 1.0f };
+    float texture_scales[4]{ 5.0f, 5.0f, 5.0f, 5.0f };
 
 public:
     void OnAttach() override
@@ -296,7 +296,7 @@ public:
             auto light_comp = entity->AddComponent<DirectionalLightComponent>();
             light_comp->data.color = glm::vec3(1.0, 1.0, 1.0);
             light_comp->data.direction = glm::normalize(glm::vec3(1.0, 0.0, 0.0));
-            light_comp->data.irradiance = 1.0f;
+            light_comp->data.irradiance = 5.0f;
         }
         scene.OnAwake();
     }

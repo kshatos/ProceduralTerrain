@@ -239,6 +239,82 @@ out vec4 FragColor;
 //////////////////////////////
 // SPLAT MAPPING
 //////////////////////////////
+/*
+Taken from the paper
+"Procedural Stochastic Textures by Tiling and Blending"
+(Thomas Deliot and Eric Heitz)
+*/
+void TriangleGrid(
+    vec2 uv,
+    out float w1, out float w2, out float w3,
+    out ivec2 vertex1, out ivec2 vertex2, out ivec2 vertex3)
+{
+    // Scaling of the input
+    uv *= 3.464; // 2 * sqrt(3)
+
+    // Skew input space into simplex triangle grid
+    const mat2 gridToSkewedGrid = mat2(1.0, 0.0, -0.57735027, 1.15470054);
+    vec2 skewedCoord = gridToSkewedGrid * uv;
+
+    // Compute local triangle vertex IDs and local barycentric coordinates
+    ivec2 baseId = ivec2(floor(skewedCoord));
+    vec3 temp = vec3(fract(skewedCoord), 0);
+    temp.z = 1.0 - temp.x - temp.y;
+    if (temp.z > 0.0)
+    {
+        w1 = temp.z;
+        w2 = temp.y;
+        w3 = temp.x;
+        vertex1 = baseId;
+        vertex2 = baseId + ivec2(0, 1);
+        vertex3 = baseId + ivec2(1, 0);
+    }
+    else
+    {
+        w1 = -temp.z;
+        w2 = 1.0 - temp.y;
+        w3 = 1.0 - temp.x;
+        vertex1 = baseId + ivec2(1, 1);
+        vertex2 = baseId + ivec2(1, 0);
+        vertex3 = baseId + ivec2(0, 1);
+    }
+}
+
+vec2 StochasticTilingHash(vec2 x)
+{
+    return fract(sin((x) * mat2(127.1, 311.7, 269.5, 183.3) )*43758.5453);
+}
+
+vec4 SampleStochastic(sampler2D tex, vec2 uv)
+{
+    // Get triangle info
+    float w1, w2, w3;
+    ivec2 vertex1, vertex2, vertex3;
+    TriangleGrid(uv, w1, w2, w3, vertex1, vertex2, vertex3);
+        
+    // Assign random offset to each triangle vertex
+    vec2 uv1 = uv + StochasticTilingHash(vertex1);
+    vec2 uv2 = uv + StochasticTilingHash(vertex2);
+    vec2 uv3 = uv + StochasticTilingHash(vertex3);
+
+    // Precompute UV derivatives 
+    vec2 duvdx = dFdx(uv);
+    vec2 duvdy = dFdy(uv);
+
+    // Fetch Gaussian input
+    vec4 G1 = textureGrad(tex, uv1, duvdx, duvdy);
+    vec4 G2 = textureGrad(tex, uv2, duvdx, duvdy);
+    vec4 G3 = textureGrad(tex, uv3, duvdx, duvdy);
+
+    // Linear blending
+    vec4 color = (
+        w1 * G1 +
+        w2 * G2 +
+        w3 * G3);
+
+    return color;
+}
+
 vec4 SampleTriplanar(
     sampler2D tex,
     vec2 xy,
@@ -246,11 +322,11 @@ vec4 SampleTriplanar(
     vec2 zx,
     vec3 normal)
 {
-    vec4 xy_sample = pow(texture(tex, xy), vec4(2.2));
-    vec4 yz_sample = pow(texture(tex, yz), vec4(2.2));
-    vec4 zx_sample = pow(texture(tex, zx), vec4(2.2));
+    vec4 xy_sample = pow(SampleStochastic(tex, xy), vec4(2.2));
+    vec4 yz_sample = pow(SampleStochastic(tex, yz), vec4(2.2));
+    vec4 zx_sample = pow(SampleStochastic(tex, zx), vec4(2.2));
     
-    vec3 weights = abs(normal);
+    vec3 weights = pow(abs(normal), vec3(2.0));
     weights /= (weights.x + weights.y + weights.z);
 
     return (
@@ -258,7 +334,6 @@ vec4 SampleTriplanar(
         weights.y * zx_sample +
         weights.z * xy_sample);
 }
-
 
 vec4 SampleTerrain(vec3 position, vec3 normal)
 {
@@ -301,7 +376,7 @@ void main()
     normal  = normal * 2.0 - 1.0;
     normal = normalize(normal);
 
-    vec3 albedo = SampleTerrain(Pos, normal).xyz;
+    vec3 albedo = SampleTerrain(Pos, Normal).xyz;
 
     PBRSurfaceData surface;
     surface.position = Pos;
