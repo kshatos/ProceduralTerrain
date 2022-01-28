@@ -43,6 +43,8 @@ class SceneLayer : public Layer
     std::shared_ptr<Mesh<Vertex_XNTBUV>> mesh;
     GameScene scene;
 
+    float texture_scales[4]{ 5.0f, 5.0f, 5.0f, 5.0f };
+
 public:
     void OnAttach() override
     {
@@ -54,23 +56,67 @@ public:
                 TextureWrapMode::Repeat,
                 TextureFilterMode::Linear));
 
+        auto mountain_tex = Texture2D::Create(
+            ".\\CustomAssets\\Textures\\HITW_Terrain-Textures-Set\\HITW-mntn-snow-greys.jpg",
+            Texture2DProperties(
+                TextureWrapMode::Repeat,
+                TextureWrapMode::Repeat,
+                TextureFilterMode::Linear));
+
+        auto grass_tex = Texture2D::Create(
+            ".\\CustomAssets\\Textures\\HITW_Terrain-Textures-Set\\HITW-TS2-range-shrub-grass-green.jpg",
+            Texture2DProperties(
+                TextureWrapMode::Repeat,
+                TextureWrapMode::Repeat,
+                TextureFilterMode::Linear));
+
+        auto forest_tex = Texture2D::Create(
+            ".\\CustomAssets\\Textures\\HITW_Terrain-Textures-Set\\HITW-TS2-forest-dark-grass-green.jpg",
+            Texture2DProperties(
+                TextureWrapMode::Repeat,
+                TextureWrapMode::Repeat,
+                TextureFilterMode::Linear));
+
+        auto barren_tex = Texture2D::Create(
+            ".\\CustomAssets\\Textures\\HITW_Terrain-Textures-Set\\HITW-TS2-range-shrub-red-desert.jpg",
+            Texture2DProperties(
+                TextureWrapMode::Repeat,
+                TextureWrapMode::Repeat,
+                TextureFilterMode::Linear));
+
         auto main_shader = Shader::CreateFromFiles(
             ".\\CustomAssets\\Shaders\\cube_sphere.vert",
             ".\\CustomAssets\\Shaders\\cube_sphere.frag");
         main_shader->Bind();
         main_material = std::make_shared<Material>(
             main_shader,
-            BufferLayout{},
+            BufferLayout
+            {
+                BufferElement{ShaderDataType::Float, "u_terrain_texture_scales[0]" },
+                BufferElement{ShaderDataType::Float, "u_terrain_texture_scales[1]" },
+                BufferElement{ShaderDataType::Float, "u_terrain_texture_scales[2]" },
+                BufferElement{ShaderDataType::Float, "u_terrain_texture_scales[3]" }
+            },
             std::vector<std::string>{
-            "u_albedo",
-                "u_normal"
+            "u_normal",
+                "u_splatmap",
+                "u_terrain_textures[0]",
+                "u_terrain_textures[1]",
+                "u_terrain_textures[2]",
+                "u_terrain_textures[3]",
         }
         );
+        main_material->SetTexture("u_terrain_textures[0]", mountain_tex);
+        main_material->SetTexture("u_terrain_textures[1]", barren_tex);
+        main_material->SetTexture("u_terrain_textures[2]", grass_tex);
+        main_material->SetTexture("u_terrain_textures[3]", forest_tex);
 
         int resolution = 512;
         float spacing = 1.0f / resolution;
         auto heightmap_data = std::make_shared<CubemapData>(resolution, 1);
         auto normal_data = std::make_shared<CubemapData>(resolution, 3);
+        auto splatmap_data = std::make_shared<CubemapData>(resolution, 4);
+
         // Calculate heightmap
         std::vector<std::thread> threads;
         for (int face_id = CubeFace::Begin; face_id < CubeFace::End; face_id++)
@@ -108,7 +154,7 @@ public:
         erosion_params.particle_start_volume = 0.8f * grid_spacing * grid_spacing;
 
         int n_particles = 1000;
-        int n_steps = 20000;
+        int n_steps = 10000;
         std::vector<ErosionParticle> particles(n_particles);
         for (auto& p : particles) { InitializeParticle(p, erosion_params); }
         for (int i = 0; i < n_steps; ++i)
@@ -173,10 +219,84 @@ public:
         for (auto& thread : threads)
             thread.join();
 
+        // Calculate splatmap
+        threads.clear();
+        for (int face_id = CubeFace::Begin; face_id < CubeFace::End; face_id++)
+        {
+            auto work = [face_id, splatmap_data, heightmap_data]() {
+                auto face = static_cast<CubeFace>(face_id);
+                for (int j = 0; j < splatmap_data->GetResolution(); ++j)
+                {
+                    for (int i = 0; i < splatmap_data->GetResolution(); ++i)
+                    {
+                        auto point = CubemapData::CubePoint(splatmap_data->GetPixelCoordinates(face, i, j));
+                        point = glm::normalize(point);
+
+                        float cosT = glm::dot(point, glm::vec3(0.0, 1.0, 0.0));
+                        float T = glm::acos(cosT);
+                        float sin2T = glm::sin(2.0f * T);
+
+                        float temperature = 1.0f - cosT* cosT;
+                        temperature += 0.1f * SmoothNoise(5.0f * point + glm::vec3(0.0, 15.0, 0.0));
+                        temperature = glm::clamp(temperature, 0.0f, 1.0f);
+
+
+                        float rainfall = sin2T * sin2T;
+                        rainfall += 0.4f * SmoothNoise(3.0f * point + glm::vec3(0.0, 15.0, 0.0));
+                        rainfall = glm::clamp(rainfall, 0.0f, 1.0f);
+
+                        float tundra = glm::clamp(0.5f - (temperature - 0.3f) / 0.1f, 0.0f, 1.0f);
+
+                        float shrub = (1.0f - tundra);
+                        float grass = (1.0f - tundra);
+                        float forest = (1.0f - tundra);
+                        if (rainfall < 0.1)
+                        {
+                            grass *= 0.0f;
+                            forest *= 0.0f;
+                        }
+                        else if (rainfall < 0.3)
+                        {
+                            float blend = 0.5f - (rainfall - 0.2f) / (2.0f * 0.1f);
+                            shrub *= blend;
+                            grass *= (1.0 - blend);
+                            forest *= 0.0;
+                        }
+                        else if (rainfall < 0.5)
+                        {
+                            shrub *= 0.0f;
+                            forest *= 0.0f;
+                        }
+                        else if (rainfall < 0.7f)
+                        {
+                            float blend = 0.5f - (rainfall - 0.6f) / (2.0f * 0.1f);
+                            shrub *= 0.0f;
+                            grass *= blend;
+                            forest *= (1.0 - blend);
+                        }
+                        else
+                        {
+                            shrub *= 0.0f;
+                            grass *= 0.0f;
+                        }
+
+                        splatmap_data->GetPixel(face, i, j, 0) = tundra;
+                        splatmap_data->GetPixel(face, i, j, 1) = shrub;
+                        splatmap_data->GetPixel(face, i, j, 2) = grass;
+                        splatmap_data->GetPixel(face, i, j, 3) = forest;
+                    }
+                }
+            };
+            threads.emplace_back(work);
+        }
+        for (auto& thread : threads)
+            thread.join();
+
         height_cubemap = UploadCubemap(heightmap_data);
         normal_cubemap = UploadCubemap(normal_data);
-        main_material->SetTexture("u_albedo", height_cubemap);
+        auto splatmap = UploadCubemap(splatmap_data);
         main_material->SetTexture("u_normal", normal_cubemap);
+        main_material->SetTexture("u_splatmap", splatmap);
 
         mesh = BuildSphereMesh(20);
         //CalculateTangentFrame(mesh);
@@ -214,7 +334,7 @@ public:
             auto light_comp = entity->AddComponent<DirectionalLightComponent>();
             light_comp->data.color = glm::vec3(1.0, 1.0, 1.0);
             light_comp->data.direction = glm::normalize(glm::vec3(1.0, 0.0, 0.0));
-            light_comp->data.irradiance = 2.0f;
+            light_comp->data.irradiance = 5.0f;
         }
         scene.OnAwake();
     }
@@ -244,6 +364,17 @@ public:
 
             ImGui_ImplOpenGL3_NewFrame();
             ImGui::NewFrame();
+
+            ImGui::Begin("Settings");
+            ImGui::SliderFloat("Texture0 Scale", &texture_scales[0], 0.001f, 10.0f);
+            main_material->SetUniformFloat("u_terrain_texture_scales[0]", texture_scales[0]);
+            ImGui::SliderFloat("Texture1 Scale", &texture_scales[1], 0.001f, 10.0f);
+            main_material->SetUniformFloat("u_terrain_texture_scales[1]", texture_scales[1]);
+            ImGui::SliderFloat("Texture2 Scale", &texture_scales[2], 0.001f, 10.0f);
+            main_material->SetUniformFloat("u_terrain_texture_scales[2]", texture_scales[2]);
+            ImGui::SliderFloat("Texture3 Scale", &texture_scales[3], 0.001f, 10.0f);
+            main_material->SetUniformFloat("u_terrain_texture_scales[3]", texture_scales[3]);
+            ImGui::End();
 
             auto s_buffer = fbuffer;
             auto s_buffer_params = s_buffer->GetParameters();

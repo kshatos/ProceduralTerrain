@@ -222,8 +222,11 @@ float DirectionalLightShadow(vec3 pos, vec3 normalDir, vec3 lightDir)
 //////////////////////////////
 // MATERIAL DATA
 //////////////////////////////
-uniform samplerCube u_albedo;
 uniform samplerCube u_normal;
+uniform samplerCube u_splatmap;
+uniform sampler2D u_terrain_textures[4];
+
+uniform float u_terrain_texture_scales[4];
 
 in vec3 Pos;
 in vec3 Normal;
@@ -233,19 +236,154 @@ in vec2 TexCoord;
 out vec4 FragColor;
 
 
+//////////////////////////////
+// SPLAT MAPPING
+//////////////////////////////
+/*
+Taken from the paper
+"Procedural Stochastic Textures by Tiling and Blending"
+(Thomas Deliot and Eric Heitz)
+*/
+void TriangleGrid(
+    vec2 uv,
+    out float w1, out float w2, out float w3,
+    out ivec2 vertex1, out ivec2 vertex2, out ivec2 vertex3)
+{
+    // Scaling of the input
+    uv *= 3.464; // 2 * sqrt(3)
+
+    // Skew input space into simplex triangle grid
+    const mat2 gridToSkewedGrid = mat2(1.0, 0.0, -0.57735027, 1.15470054);
+    vec2 skewedCoord = gridToSkewedGrid * uv;
+
+    // Compute local triangle vertex IDs and local barycentric coordinates
+    ivec2 baseId = ivec2(floor(skewedCoord));
+    vec3 temp = vec3(fract(skewedCoord), 0);
+    temp.z = 1.0 - temp.x - temp.y;
+    if (temp.z > 0.0)
+    {
+        w1 = temp.z;
+        w2 = temp.y;
+        w3 = temp.x;
+        vertex1 = baseId;
+        vertex2 = baseId + ivec2(0, 1);
+        vertex3 = baseId + ivec2(1, 0);
+    }
+    else
+    {
+        w1 = -temp.z;
+        w2 = 1.0 - temp.y;
+        w3 = 1.0 - temp.x;
+        vertex1 = baseId + ivec2(1, 1);
+        vertex2 = baseId + ivec2(1, 0);
+        vertex3 = baseId + ivec2(0, 1);
+    }
+}
+
+vec2 StochasticTilingHash(vec2 x)
+{
+    return fract(sin((x) * mat2(127.1, 311.7, 269.5, 183.3) )*43758.5453);
+}
+
+vec4 SampleStochastic(sampler2D tex, vec2 uv)
+{
+    // Get triangle info
+    float w1, w2, w3;
+    ivec2 vertex1, vertex2, vertex3;
+    TriangleGrid(uv, w1, w2, w3, vertex1, vertex2, vertex3);
+        
+    // Assign random offset to each triangle vertex
+    vec2 uv1 = uv + StochasticTilingHash(vertex1);
+    vec2 uv2 = uv + StochasticTilingHash(vertex2);
+    vec2 uv3 = uv + StochasticTilingHash(vertex3);
+
+    // Precompute UV derivatives 
+    vec2 duvdx = dFdx(uv);
+    vec2 duvdy = dFdy(uv);
+
+    // Fetch Gaussian input
+    vec4 G1 = textureGrad(tex, uv1, duvdx, duvdy);
+    vec4 G2 = textureGrad(tex, uv2, duvdx, duvdy);
+    vec4 G3 = textureGrad(tex, uv3, duvdx, duvdy);
+
+    // Linear blending
+    vec4 color = (
+        w1 * G1 +
+        w2 * G2 +
+        w3 * G3);
+
+    return color;
+}
+
+vec4 SampleTriplanar(
+    sampler2D tex,
+    vec2 xy,
+    vec2 yz,
+    vec2 zx,
+    vec3 normal)
+{
+    vec4 xy_sample = pow(SampleStochastic(tex, xy), vec4(2.2));
+    vec4 yz_sample = pow(SampleStochastic(tex, yz), vec4(2.2));
+    vec4 zx_sample = pow(SampleStochastic(tex, zx), vec4(2.2));
+    
+    vec3 weights = pow(abs(normal), vec3(2.0));
+    weights /= (weights.x + weights.y + weights.z);
+
+    return (
+        weights.x * yz_sample +
+        weights.y * zx_sample +
+        weights.z * xy_sample);
+}
+
+vec4 SampleTerrain(vec3 position, vec3 normal)
+{
+    vec4 splat_weights = texture(u_splatmap, Pos);
+
+    vec2 xy = Pos.xy;
+    vec2 yz = Pos.yz;
+    vec2 zx = Pos.zx;
+
+    float scale = u_terrain_texture_scales[0];
+    vec4 sample0 = SampleTriplanar(
+        u_terrain_textures[0], scale*xy, scale*yz, scale*zx, normal);
+
+    scale = u_terrain_texture_scales[1];
+    vec4 sample1 = SampleTriplanar(
+        u_terrain_textures[1], scale*xy, scale*yz, scale*zx, normal);
+        
+    scale = u_terrain_texture_scales[2];
+    vec4 sample2 = SampleTriplanar(
+        u_terrain_textures[2], scale*xy, scale*yz, scale*zx, normal);
+    
+    scale = u_terrain_texture_scales[3];
+    vec4 sample3 = SampleTriplanar(
+        u_terrain_textures[3], scale*xy, scale*yz, scale*zx, normal);
+
+    return (
+        sample0 * splat_weights.x +
+        sample1 * splat_weights.y +
+        sample2 * splat_weights.z +
+        sample3 * splat_weights.w);
+}
+
+
+//////////////////////////////
+// MAIN
+//////////////////////////////
 void main()
 {
     vec3 normal = texture(u_normal, Pos).xyz;
     normal  = normal * 2.0 - 1.0;
     normal = normalize(normal);
-    vec3 albedo = texture(u_albedo, Pos).xyz;
+
+    vec3 albedo = SampleTerrain(Pos, Normal).xyz;
 
     PBRSurfaceData surface;
     surface.position = Pos;
     surface.normal = normal;
     surface.albedo = albedo;
     surface.metallic = 0.0;
-    surface.roughness = 0.5;
+    surface.roughness = 0.8;
     surface.roughness *= surface.roughness;
 
     // Accumulate lighting contributions
@@ -269,6 +407,7 @@ void main()
     // HDR Tonemap and gamma correction
     result = result / (result + vec3(1.0));
     result = pow(result, vec3(1.0/2.2)); 
+
 
     FragColor = vec4(result, 1.0);
 }
