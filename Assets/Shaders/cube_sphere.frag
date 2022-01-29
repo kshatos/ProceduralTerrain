@@ -222,8 +222,10 @@ float DirectionalLightShadow(vec3 pos, vec3 normalDir, vec3 lightDir)
 //////////////////////////////
 // MATERIAL DATA
 //////////////////////////////
+uniform samplerCube u_heightmap;
 uniform samplerCube u_normal;
 uniform samplerCube u_splatmap;
+uniform sampler2D u_water_normalmap;
 uniform sampler2D u_terrain_textures[4];
 
 uniform float u_terrain_texture_scales[4];
@@ -335,6 +337,34 @@ vec4 SampleTriplanar(
         weights.z * xy_sample);
 }
 
+vec3 SampleTriplanarNormal(
+    sampler2D tex,
+    vec2 xy,
+    vec2 yz,
+    vec2 zx,
+    vec3 normal)
+{
+    vec3 x_normal = 2.0 * SampleStochastic(tex, yz).xyz - 1.0;
+    vec3 y_normal = 2.0 * SampleStochastic(tex, zx).xyz - 1.0;
+    vec3 z_normal = 2.0 * SampleStochastic(tex, xy).xyz - 1.0;
+
+    x_normal.z *= sign(normal.x);
+    y_normal.z *= sign(normal.y);
+    z_normal.z *= sign(normal.z);
+
+    x_normal = vec3(x_normal.xy + normal.zy, abs(x_normal.z) * normal.x);
+    y_normal = vec3(y_normal.xy + normal.xz, abs(y_normal.z) * normal.y);
+    z_normal = vec3(z_normal.xy + normal.xy, abs(z_normal.z) * normal.z);
+
+    vec3 weights = pow(abs(normal), vec3(2.0));
+    weights /= (weights.x + weights.y + weights.z);
+
+    return normalize(
+        weights.x * x_normal.zyx +
+        weights.y * y_normal.xzy +
+        weights.z * z_normal.xyz);
+}
+
 vec4 SampleTerrain(vec3 position, vec3 normal)
 {
     vec4 splat_weights = texture(u_splatmap, Pos);
@@ -372,18 +402,21 @@ vec4 SampleTerrain(vec3 position, vec3 normal)
 //////////////////////////////
 void main()
 {
-    vec3 normal = texture(u_normal, Pos).xyz;
-    normal  = normal * 2.0 - 1.0;
-    normal = normalize(normal);
+    vec3 water_normal = SampleTriplanarNormal(
+        u_water_normalmap, 2*Pos.xy, 2*Pos.yz, 2*Pos.zx, Normal);
+    vec3 land_normal = normalize(2.0 * texture(u_normal, Pos).xyz - 1.0);
 
-    vec3 albedo = SampleTerrain(Pos, Normal).xyz;
+    float height = texture(u_heightmap, Pos).x;
+    vec3 normal = true ? water_normal : land_normal;
+    vec3 albedo = true ? vec3(0.0f, 0.0f, 0.7f) : SampleTerrain(Pos, Normal).xyz;
+    float roughness = true ? 0.05 : 0.80;
 
     PBRSurfaceData surface;
     surface.position = Pos;
     surface.normal = normal;
     surface.albedo = albedo;
     surface.metallic = 0.0;
-    surface.roughness = 0.8;
+    surface.roughness = roughness;
     surface.roughness *= surface.roughness;
 
     // Accumulate lighting contributions

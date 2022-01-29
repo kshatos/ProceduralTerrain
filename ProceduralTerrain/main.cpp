@@ -84,6 +84,13 @@ public:
                 TextureWrapMode::Repeat,
                 TextureFilterMode::Linear));
 
+        auto water_tex = Texture2D::Create(
+            ".\\CustomAssets\\Textures\\Water0341normal.jpg",
+            Texture2DProperties(
+                TextureWrapMode::Repeat,
+                TextureWrapMode::Repeat,
+                TextureFilterMode::Linear));
+
         auto main_shader = Shader::CreateFromFiles(
             ".\\CustomAssets\\Shaders\\cube_sphere.vert",
             ".\\CustomAssets\\Shaders\\cube_sphere.frag");
@@ -98,14 +105,17 @@ public:
                 BufferElement{ShaderDataType::Float, "u_terrain_texture_scales[3]" }
             },
             std::vector<std::string>{
-            "u_normal",
+                "u_heightmap",
+                "u_normal",
                 "u_splatmap",
+                "u_water_normalmap",
                 "u_terrain_textures[0]",
                 "u_terrain_textures[1]",
                 "u_terrain_textures[2]",
                 "u_terrain_textures[3]",
         }
         );
+        main_material->SetTexture("u_water_normalmap", water_tex);
         main_material->SetTexture("u_terrain_textures[0]", mountain_tex);
         main_material->SetTexture("u_terrain_textures[1]", barren_tex);
         main_material->SetTexture("u_terrain_textures[2]", grass_tex);
@@ -131,11 +141,11 @@ public:
                         point = glm::normalize(point);
 
                         float ridge_noise = 1.00f * FractalRidgeNoise(point, 2.0f, 4, 0.5f, 2.0f);
-                        float smooth_noise = 0.0f * FractalNoise(point, 4.0f, 4, 0.7f, 2.0f);
+                        float smooth_noise = 0.05f * FractalNoise(point, 4.0f, 4, 0.7f, 2.0f);
                         float blend = 0.5f * (glm::simplex(1.0f * point) + 1.0f);
                         float noise = blend * ridge_noise + (1.0 - blend) * smooth_noise;
 
-                        heightmap_data->GetPixel(face, i, j, 0) = 0.2 + 0.1 * noise;
+                        heightmap_data->GetPixel(face, i, j, 0) = 0.1 * noise;
                     }
                 }
             };
@@ -236,7 +246,7 @@ public:
                         float T = glm::acos(cosT);
                         float sin2T = glm::sin(2.0f * T);
 
-                        float temperature = 1.0f - cosT* cosT;
+                        float temperature = 1.0f - cosT * cosT;
                         temperature += 0.1f * SmoothNoise(5.0f * point + glm::vec3(0.0, 15.0, 0.0));
                         temperature = glm::clamp(temperature, 0.0f, 1.0f);
 
@@ -295,6 +305,7 @@ public:
         height_cubemap = UploadCubemap(heightmap_data);
         normal_cubemap = UploadCubemap(normal_data);
         auto splatmap = UploadCubemap(splatmap_data);
+        main_material->SetTexture("u_heightmap", height_cubemap);
         main_material->SetTexture("u_normal", normal_cubemap);
         main_material->SetTexture("u_splatmap", splatmap);
 
