@@ -43,7 +43,14 @@ class SceneLayer : public Layer
     std::shared_ptr<Mesh<Vertex_XNTBUV>> mesh;
     GameScene scene;
 
+    float time_elapsed = 0.0f;
     float texture_scales[4]{ 5.0f, 5.0f, 5.0f, 5.0f };
+    float water_scale = 5.0f;
+    float water_speed = 0.1f;
+    float water_level = 0.5f;
+    float water_depth_scale = 1.0f;
+    glm::vec3 water_shallow_color{ 0.0f, 1.0f, 0.0f };
+    glm::vec3 water_deep_color{ 0.0f, 0.5f, 0.0f };
 
 public:
     void OnAttach() override
@@ -99,13 +106,20 @@ public:
             main_shader,
             BufferLayout
             {
+                BufferElement{ShaderDataType::Float, "time" },
+                BufferElement{ShaderDataType::Float, "u_water_level" },
+                BufferElement{ShaderDataType::Float, "u_water_depth_scale" },
+                BufferElement{ShaderDataType::Float3, "u_water_shallow_color" },
+                BufferElement{ShaderDataType::Float3, "u_water_deep_color" },
+                BufferElement{ShaderDataType::Float, "u_water_speed" },
+                BufferElement{ShaderDataType::Float, "u_water_scale" },
                 BufferElement{ShaderDataType::Float, "u_terrain_texture_scales[0]" },
                 BufferElement{ShaderDataType::Float, "u_terrain_texture_scales[1]" },
                 BufferElement{ShaderDataType::Float, "u_terrain_texture_scales[2]" },
                 BufferElement{ShaderDataType::Float, "u_terrain_texture_scales[3]" }
             },
             std::vector<std::string>{
-                "u_heightmap",
+            "u_heightmap",
                 "u_normal",
                 "u_splatmap",
                 "u_water_normalmap",
@@ -145,7 +159,7 @@ public:
                         float blend = 0.5f * (glm::simplex(1.0f * point) + 1.0f);
                         float noise = blend * ridge_noise + (1.0 - blend) * smooth_noise;
 
-                        heightmap_data->GetPixel(face, i, j, 0) = 0.1 * noise;
+                        heightmap_data->GetPixel(face, i, j, 0) = 0.5 + 0.1 * noise;
                     }
                 }
             };
@@ -356,6 +370,9 @@ public:
 
     void OnUpdate(float time_step) override
     {
+        time_elapsed += time_step;
+        main_material->SetUniformFloat("time", time_elapsed);
+
         MoveCamera(time_step);
         scene.OnUpdate(time_step);
         {
@@ -375,8 +392,20 @@ public:
 
             ImGui_ImplOpenGL3_NewFrame();
             ImGui::NewFrame();
-
             ImGui::Begin("Settings");
+
+            ImGui::ColorPicker4("Shallow Water Color", &water_shallow_color.x);
+            main_material->SetUniformFloat3("u_water_shallow_color", water_shallow_color);
+            ImGui::ColorPicker4("Deep Water Color", &water_deep_color.x);
+            main_material->SetUniformFloat3("u_water_deep_color", water_deep_color);
+            ImGui::SliderFloat("u_water_level", &water_level, 0.0f, 1.0f);
+            main_material->SetUniformFloat("u_water_level", water_level);
+            ImGui::SliderFloat("u_water_depth_scale", &water_depth_scale, 0.0f, 0.1f);
+            main_material->SetUniformFloat("u_water_depth_scale", water_depth_scale);
+            ImGui::SliderFloat("Water Speed", &water_speed, 0.0f, 1.0f);
+            main_material->SetUniformFloat("u_water_speed", water_speed);
+            ImGui::SliderFloat("Water Scale", &water_scale, 0.001f, 10.0f);
+            main_material->SetUniformFloat("u_water_scale", water_scale);
             ImGui::SliderFloat("Texture0 Scale", &texture_scales[0], 0.001f, 10.0f);
             main_material->SetUniformFloat("u_terrain_texture_scales[0]", texture_scales[0]);
             ImGui::SliderFloat("Texture1 Scale", &texture_scales[1], 0.001f, 10.0f);

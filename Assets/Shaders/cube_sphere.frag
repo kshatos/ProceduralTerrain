@@ -228,6 +228,13 @@ uniform samplerCube u_splatmap;
 uniform sampler2D u_water_normalmap;
 uniform sampler2D u_terrain_textures[4];
 
+uniform float time;
+uniform float u_water_level;
+uniform float u_water_depth_scale;
+uniform vec3 u_water_shallow_color;
+uniform vec3 u_water_deep_color;
+uniform float u_water_speed;
+uniform float u_water_scale;
 uniform float u_terrain_texture_scales[4];
 
 in vec3 Pos;
@@ -402,14 +409,23 @@ vec4 SampleTerrain(vec3 position, vec3 normal)
 //////////////////////////////
 void main()
 {
+    float height = texture(u_heightmap, Pos).x;
+    float blend = clamp((u_water_level - height) / u_water_depth_scale, 0.0, 1.0);
+
     vec3 water_normal = SampleTriplanarNormal(
-        u_water_normalmap, 2*Pos.xy, 2*Pos.yz, 2*Pos.zx, Normal);
+        u_water_normalmap,
+        u_water_scale * Pos.xy + time * u_water_speed * vec2(0.5, 0.5),
+        u_water_scale * Pos.yz + time * u_water_speed * vec2(0.5, 0.5),
+        u_water_scale * Pos.zx + time * u_water_speed * vec2(0.5, 0.5),
+        Normal);
     vec3 land_normal = normalize(2.0 * texture(u_normal, Pos).xyz - 1.0);
 
-    float height = texture(u_heightmap, Pos).x;
-    vec3 normal = true ? water_normal : land_normal;
-    vec3 albedo = true ? vec3(0.0f, 0.0f, 0.7f) : SampleTerrain(Pos, Normal).xyz;
-    float roughness = true ? 0.05 : 0.80;
+    vec3 water_color = (1.0 - blend) * u_water_shallow_color + blend * u_water_deep_color;
+    vec3 land_color = SampleTerrain(Pos, Normal).xyz;
+
+    vec3 normal = (1.0 - blend) * water_normal + blend * land_normal;
+    vec3 albedo = (1.0 - blend) * water_color + blend * land_color;
+    float roughness = (1.0 - blend) * 0.05  + blend * 0.80;
 
     PBRSurfaceData surface;
     surface.position = Pos;
