@@ -5,6 +5,7 @@ const float PI = 3.14159265359;
 // CAMERA DATA
 //////////////////////////////
 uniform vec3 u_viewPos;
+uniform mat3 u_NormalMatrix;
 
 
 //////////////////////////////
@@ -237,6 +238,7 @@ uniform float u_water_speed;
 uniform float u_water_scale;
 uniform float u_terrain_texture_scales[4];
 
+in vec3 ModelPos;
 in vec3 Pos;
 in vec3 Normal;
 in vec3 Tangent;
@@ -344,13 +346,15 @@ vec4 SampleTriplanar(
         weights.z * xy_sample);
 }
 
-vec4 SampleTerrain(vec3 position, vec3 normal)
+vec4 SampleTerrain(vec3 position)
 {
-    vec4 splat_weights = texture(u_splatmap, Pos);
+    vec4 splat_weights = texture(u_splatmap, position);
 
-    vec2 xy = Pos.xy;
-    vec2 yz = Pos.yz;
-    vec2 zx = Pos.zx;
+    vec3 normal = normalize(position);
+
+    vec2 xy = position.xy;
+    vec2 yz = position.yz;
+    vec2 zx = position.zx;
 
     float scale = u_terrain_texture_scales[0];
     vec4 sample0 = SampleTriplanar(
@@ -427,18 +431,18 @@ vec3 SampleWaterNormal(
 //////////////////////////////
 void main()
 {
-    float height = texture(u_heightmap, Pos).x;
+    float height = texture(u_heightmap, ModelPos).x;
     float blend = smoothstep(-1.0, 0.0, (u_water_level - height) / u_water_depth_scale);
     float mask = height >= u_water_level ? 0.0 : 1.0;
 
-    vec3 water_normal = SampleWaterNormal(u_water_normalmap, Pos, Normal);
+    vec3 water_normal = SampleWaterNormal(u_water_normalmap, ModelPos, Normal);
     water_normal = normalize((1.0 - blend) * water_normal + blend * Normal);
-    vec3 land_normal = normalize(2.0 * texture(u_normal, Pos).xyz - 1.0);
+    vec3 land_normal = u_NormalMatrix * normalize(2.0 * texture(u_normal, ModelPos).xyz - 1.0);
 
     vec3 water_color = (1.0 - blend) * u_water_shallow_color + blend * u_water_deep_color;
-    vec3 land_color = SampleTerrain(Pos, Normal).xyz;
+    vec3 land_color = SampleTerrain(ModelPos).xyz;
 
-    vec3 normal = (1.0 - mask) * water_normal + mask * land_normal;
+    vec3 normal = normalize((1.0 - mask) * water_normal + mask * land_normal);
     vec3 albedo = (1.0 - blend) * water_color + blend * land_color;
     float roughness = (1.0 - blend) * 0.2  + blend * 0.70;
 

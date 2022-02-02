@@ -11,6 +11,7 @@ set(PROCEDURAL_TERRAIN_SOURCE
     ProceduralTerrain/noise3d.hpp
     ProceduralTerrain/erosion.cpp
     ProceduralTerrain/erosion.hpp
+    ProceduralTerrain/custom_components.hpp
 )
 
 add_executable(ProceduralTerrain

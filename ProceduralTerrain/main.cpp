@@ -8,28 +8,11 @@
 #include "cube_sphere.hpp"
 #include "noise3d.hpp"
 #include "erosion.hpp"
+#include "custom_components.hpp"
 
 
 using namespace Merlin;
 
-
-void DumpData(
-    std::vector<ErosionParticle> data,
-    std::string filename)
-{
-    std::ofstream file;
-    file.open(filename);
-    for (auto& item : data)
-    {
-        std::string line = (
-            std::to_string(item.position.x) + ", " +
-            std::to_string(item.position.y) + ", " +
-            std::to_string(item.position.z));
-
-        file << line << std::endl;
-    }
-    file.close();
-}
 
 class SceneLayer : public Layer
 {
@@ -49,7 +32,7 @@ class SceneLayer : public Layer
     float water_speed = 0.038f;
     float water_level = 0.543f;
     float water_depth_scale = 0.017f;
-    glm::vec3 water_shallow_color{ 1.0f/256.0, 5.0f/256.0f, 38.0/256.0f };
+    glm::vec3 water_shallow_color{ 1.0f / 256.0, 5.0f / 256.0f, 38.0 / 256.0f };
     glm::vec3 water_deep_color{ 3.0f / 256.0, 29.0f / 256.0f, 156.0 / 256.0f };
 
 public:
@@ -340,6 +323,7 @@ public:
             auto entity = scene.CreateEntity();
             auto camera_component = entity->AddComponent<CameraComponent>();
             auto transform_comp = entity->AddComponent<TransformComponent>();
+            auto move_comp = entity->AddComponent<MovementControllerComponent>();
             camera_component->data.camera = camera;
             camera_component->data.frame_buffer = fbuffer;
             camera_component->data.clear_color = glm::vec4(0.05f, 0.05f, 0.05f, 1.0f);
@@ -351,6 +335,8 @@ public:
             auto entity = scene.CreateEntity();
             auto transform_comp = entity->AddComponent<TransformComponent>();
             auto mesh_render_comp = entity->AddComponent<MeshRenderComponent>();
+            auto rotation_comp = entity->AddComponent<RotatingPlanetComponent>();
+            rotation_comp->rotation_speed = 0.1;
             mesh_render_comp->data.vertex_array = varray;
             mesh_render_comp->data.material = main_material;
         }
@@ -373,7 +359,6 @@ public:
         time_elapsed += time_step;
         main_material->SetUniformFloat("time", time_elapsed);
 
-        MoveCamera(time_step);
         scene.OnUpdate(time_step);
         {
             Renderer::SetViewport(
@@ -430,27 +415,6 @@ public:
     {
     }
 
-    void MoveCamera(float time_step)
-    {
-        const auto& up = camera_transform->transform.Up();
-        const auto& right = camera_transform->transform.Right();
-        const auto& forward = camera_transform->transform.Forward();
-        float speed = 5.0e-1f;
-        if (Input::GetKeyDown(Key::W))
-            camera_transform->transform.Translate(+forward * speed * time_step);
-        if (Input::GetKeyDown(Key::A))
-            camera_transform->transform.Translate(-right * speed * time_step);
-        if (Input::GetKeyDown(Key::S))
-            camera_transform->transform.Translate(-forward * speed * time_step);
-        if (Input::GetKeyDown(Key::D))
-            camera_transform->transform.Translate(+right * speed * time_step);
-        if (Input::GetKeyDown(Key::Z))
-            camera_transform->transform.Translate(+up * speed * time_step);
-        if (Input::GetKeyDown(Key::X))
-            camera_transform->transform.Translate(-up * speed * time_step);
-
-        camera_transform->transform.Rotate(up, Input::GetMouseScrollDelta().y * time_step * 20.0);
-    }
 };
 
 class ProceduralTerrainApp : public Application
