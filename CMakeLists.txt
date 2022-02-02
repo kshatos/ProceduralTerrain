@@ -13,6 +13,7 @@ set(PROCEDURAL_TERRAIN_SOURCE
     ProceduralTerrain/erosion.hpp
     ProceduralTerrain/custom_components.hpp
     ProceduralTerrain/editor_window.hpp
+    ProceduralTerrain/terrain.hpp
 )
 
 add_executable(ProceduralTerrain
