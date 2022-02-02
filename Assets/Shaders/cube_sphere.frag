@@ -222,10 +222,19 @@ float DirectionalLightShadow(vec3 pos, vec3 normalDir, vec3 lightDir)
 //////////////////////////////
 // MATERIAL DATA
 //////////////////////////////
+uniform samplerCube u_heightmap;
 uniform samplerCube u_normal;
 uniform samplerCube u_splatmap;
+uniform sampler2D u_water_normalmap;
 uniform sampler2D u_terrain_textures[4];
 
+uniform float time;
+uniform float u_water_level;
+uniform float u_water_depth_scale;
+uniform vec3 u_water_shallow_color;
+uniform vec3 u_water_deep_color;
+uniform float u_water_speed;
+uniform float u_water_scale;
 uniform float u_terrain_texture_scales[4];
 
 in vec3 Pos;
@@ -366,24 +375,79 @@ vec4 SampleTerrain(vec3 position, vec3 normal)
         sample3 * splat_weights.w);
 }
 
+//////////////////////////////
+// Water
+//////////////////////////////
+vec3 SampleWaterNormal(
+    sampler2D tex,
+    vec3 pos,
+    vec3 normal)
+{
+    // 
+    vec3 x_normal = 2.0 * SampleStochastic(
+        tex, pos.yz / u_water_scale + time * u_water_speed * vec2(0.5, 0.5)).xyz - 1.0;
+    x_normal += 2.0 * SampleStochastic(
+        tex, pos.zy / u_water_scale + time * u_water_speed * vec2(-0.5, 0.5)).xyz - 1.0;
+    x_normal.z = 1.0;
+    x_normal = normalize(x_normal);
+
+    vec3 y_normal = 2.0 * SampleStochastic(
+        tex, pos.zx / u_water_scale + time * u_water_speed * vec2(0.5, 0.5)).xyz - 1.0;
+    y_normal += 2.0 * SampleStochastic(
+        tex, pos.xz / u_water_scale + time * u_water_speed * vec2(-0.5, 0.5)).xyz - 1.0;
+    y_normal.z = 1.0;
+    y_normal = normalize(y_normal);
+    
+    vec3 z_normal = 2.0 * SampleStochastic(
+        tex, pos.xy / u_water_scale + time * u_water_speed * vec2(0.5, 0.5)).xyz - 1.0;
+    z_normal += 2.0 * SampleStochastic(
+        tex, pos.yx / u_water_scale + time * u_water_speed * vec2(-0.5, 0.5)).xyz - 1.0;
+    z_normal.z = 1.0;
+    z_normal = normalize(z_normal);
+
+    x_normal.z *= sign(normal.x);
+    y_normal.z *= sign(normal.y);
+    z_normal.z *= sign(normal.z);
+
+    x_normal = vec3(x_normal.xy + normal.zy, abs(x_normal.z) * normal.x);
+    y_normal = vec3(y_normal.xy + normal.xz, abs(y_normal.z) * normal.y);
+    z_normal = vec3(z_normal.xy + normal.xy, abs(z_normal.z) * normal.z);
+
+    vec3 weights = pow(abs(normal), vec3(2.0));
+    weights /= (weights.x + weights.y + weights.z);
+
+    return normalize(
+        weights.x * x_normal.zyx +
+        weights.y * y_normal.xzy +
+        weights.z * z_normal.xyz);
+}
 
 //////////////////////////////
 // MAIN
 //////////////////////////////
 void main()
 {
-    vec3 normal = texture(u_normal, Pos).xyz;
-    normal  = normal * 2.0 - 1.0;
-    normal = normalize(normal);
+    float height = texture(u_heightmap, Pos).x;
+    float blend = smoothstep(-1.0, 0.0, (u_water_level - height) / u_water_depth_scale);
+    float mask = height >= u_water_level ? 0.0 : 1.0;
 
-    vec3 albedo = SampleTerrain(Pos, Normal).xyz;
+    vec3 water_normal = SampleWaterNormal(u_water_normalmap, Pos, Normal);
+    water_normal = normalize((1.0 - blend) * water_normal + blend * Normal);
+    vec3 land_normal = normalize(2.0 * texture(u_normal, Pos).xyz - 1.0);
+
+    vec3 water_color = (1.0 - blend) * u_water_shallow_color + blend * u_water_deep_color;
+    vec3 land_color = SampleTerrain(Pos, Normal).xyz;
+
+    vec3 normal = (1.0 - mask) * water_normal + mask * land_normal;
+    vec3 albedo = (1.0 - blend) * water_color + blend * land_color;
+    float roughness = (1.0 - blend) * 0.2  + blend * 0.70;
 
     PBRSurfaceData surface;
     surface.position = Pos;
     surface.normal = normal;
     surface.albedo = albedo;
     surface.metallic = 0.0;
-    surface.roughness = 0.8;
+    surface.roughness = roughness;
     surface.roughness *= surface.roughness;
 
     // Accumulate lighting contributions

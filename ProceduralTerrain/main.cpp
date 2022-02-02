@@ -43,7 +43,14 @@ class SceneLayer : public Layer
     std::shared_ptr<Mesh<Vertex_XNTBUV>> mesh;
     GameScene scene;
 
-    float texture_scales[4]{ 5.0f, 5.0f, 5.0f, 5.0f };
+    float time_elapsed = 0.0f;
+    float texture_scales[4]{ 2.5f, 2.5f, 2.5f, 2.5f };
+    float water_scale = 0.01;
+    float water_speed = 0.038f;
+    float water_level = 0.543f;
+    float water_depth_scale = 0.017f;
+    glm::vec3 water_shallow_color{ 1.0f/256.0, 5.0f/256.0f, 38.0/256.0f };
+    glm::vec3 water_deep_color{ 3.0f / 256.0, 29.0f / 256.0f, 156.0 / 256.0f };
 
 public:
     void OnAttach() override
@@ -84,6 +91,13 @@ public:
                 TextureWrapMode::Repeat,
                 TextureFilterMode::Linear));
 
+        auto water_tex = Texture2D::Create(
+            ".\\CustomAssets\\Textures\\Water0341normal.jpg",
+            Texture2DProperties(
+                TextureWrapMode::Repeat,
+                TextureWrapMode::Repeat,
+                TextureFilterMode::Linear));
+
         auto main_shader = Shader::CreateFromFiles(
             ".\\CustomAssets\\Shaders\\cube_sphere.vert",
             ".\\CustomAssets\\Shaders\\cube_sphere.frag");
@@ -92,20 +106,30 @@ public:
             main_shader,
             BufferLayout
             {
+                BufferElement{ShaderDataType::Float, "time" },
+                BufferElement{ShaderDataType::Float, "u_water_level" },
+                BufferElement{ShaderDataType::Float, "u_water_depth_scale" },
+                BufferElement{ShaderDataType::Float3, "u_water_shallow_color" },
+                BufferElement{ShaderDataType::Float3, "u_water_deep_color" },
+                BufferElement{ShaderDataType::Float, "u_water_speed" },
+                BufferElement{ShaderDataType::Float, "u_water_scale" },
                 BufferElement{ShaderDataType::Float, "u_terrain_texture_scales[0]" },
                 BufferElement{ShaderDataType::Float, "u_terrain_texture_scales[1]" },
                 BufferElement{ShaderDataType::Float, "u_terrain_texture_scales[2]" },
                 BufferElement{ShaderDataType::Float, "u_terrain_texture_scales[3]" }
             },
             std::vector<std::string>{
-            "u_normal",
+            "u_heightmap",
+                "u_normal",
                 "u_splatmap",
+                "u_water_normalmap",
                 "u_terrain_textures[0]",
                 "u_terrain_textures[1]",
                 "u_terrain_textures[2]",
                 "u_terrain_textures[3]",
         }
         );
+        main_material->SetTexture("u_water_normalmap", water_tex);
         main_material->SetTexture("u_terrain_textures[0]", mountain_tex);
         main_material->SetTexture("u_terrain_textures[1]", barren_tex);
         main_material->SetTexture("u_terrain_textures[2]", grass_tex);
@@ -131,11 +155,11 @@ public:
                         point = glm::normalize(point);
 
                         float ridge_noise = 1.00f * FractalRidgeNoise(point, 2.0f, 4, 0.5f, 2.0f);
-                        float smooth_noise = 0.0f * FractalNoise(point, 4.0f, 4, 0.7f, 2.0f);
+                        float smooth_noise = 0.05f * FractalNoise(point, 4.0f, 4, 0.7f, 2.0f);
                         float blend = 0.5f * (glm::simplex(1.0f * point) + 1.0f);
                         float noise = blend * ridge_noise + (1.0 - blend) * smooth_noise;
 
-                        heightmap_data->GetPixel(face, i, j, 0) = 0.2 + 0.1 * noise;
+                        heightmap_data->GetPixel(face, i, j, 0) = 0.5 + 0.1 * noise;
                     }
                 }
             };
@@ -236,7 +260,7 @@ public:
                         float T = glm::acos(cosT);
                         float sin2T = glm::sin(2.0f * T);
 
-                        float temperature = 1.0f - cosT* cosT;
+                        float temperature = 1.0f - cosT * cosT;
                         temperature += 0.1f * SmoothNoise(5.0f * point + glm::vec3(0.0, 15.0, 0.0));
                         temperature = glm::clamp(temperature, 0.0f, 1.0f);
 
@@ -295,6 +319,7 @@ public:
         height_cubemap = UploadCubemap(heightmap_data);
         normal_cubemap = UploadCubemap(normal_data);
         auto splatmap = UploadCubemap(splatmap_data);
+        main_material->SetTexture("u_heightmap", height_cubemap);
         main_material->SetTexture("u_normal", normal_cubemap);
         main_material->SetTexture("u_splatmap", splatmap);
 
@@ -345,6 +370,9 @@ public:
 
     void OnUpdate(float time_step) override
     {
+        time_elapsed += time_step;
+        main_material->SetUniformFloat("time", time_elapsed);
+
         MoveCamera(time_step);
         scene.OnUpdate(time_step);
         {
@@ -364,8 +392,20 @@ public:
 
             ImGui_ImplOpenGL3_NewFrame();
             ImGui::NewFrame();
-
             ImGui::Begin("Settings");
+
+            ImGui::ColorPicker4("Shallow Water Color", &water_shallow_color.x);
+            main_material->SetUniformFloat3("u_water_shallow_color", water_shallow_color);
+            ImGui::ColorPicker4("Deep Water Color", &water_deep_color.x);
+            main_material->SetUniformFloat3("u_water_deep_color", water_deep_color);
+            ImGui::SliderFloat("u_water_level", &water_level, 0.0f, 1.0f);
+            main_material->SetUniformFloat("u_water_level", water_level);
+            ImGui::SliderFloat("u_water_depth_scale", &water_depth_scale, 0.0f, 0.1f);
+            main_material->SetUniformFloat("u_water_depth_scale", water_depth_scale);
+            ImGui::SliderFloat("Water Speed", &water_speed, 0.0f, 1.0f);
+            main_material->SetUniformFloat("u_water_speed", water_speed);
+            ImGui::SliderFloat("Water Scale", &water_scale, 0.0f, 1.0f);
+            main_material->SetUniformFloat("u_water_scale", water_scale);
             ImGui::SliderFloat("Texture0 Scale", &texture_scales[0], 0.001f, 10.0f);
             main_material->SetUniformFloat("u_terrain_texture_scales[0]", texture_scales[0]);
             ImGui::SliderFloat("Texture1 Scale", &texture_scales[1], 0.001f, 10.0f);
