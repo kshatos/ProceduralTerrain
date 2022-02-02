@@ -16,12 +16,17 @@ using namespace Merlin;
 
 class SceneLayer : public Layer
 {
-    std::shared_ptr<Camera> camera;
-    std::shared_ptr<TransformComponent> camera_transform;
-    std::shared_ptr<Texture2D> main_texture;
-    std::shared_ptr<Material> main_material;
-    std::shared_ptr<Cubemap> height_cubemap;
-    std::shared_ptr<Cubemap> normal_cubemap;
+    std::shared_ptr<Camera> camera = nullptr;
+    std::shared_ptr<Material> main_material = nullptr;
+
+    std::shared_ptr<CubemapData> height_data = nullptr;
+    std::shared_ptr<CubemapData> normal_data = nullptr;
+    std::shared_ptr<CubemapData> splat_data = nullptr;
+
+    std::shared_ptr<Cubemap> height_cubemap = nullptr;
+    std::shared_ptr<Cubemap> normal_cubemap = nullptr;
+    std::shared_ptr<Cubemap> splat_cubemap = nullptr;
+
     std::shared_ptr<FrameBuffer> fbuffer;
     std::shared_ptr<Mesh<Vertex_XNTBUV>> mesh;
     GameScene scene;
@@ -36,16 +41,9 @@ class SceneLayer : public Layer
     glm::vec3 water_deep_color{ 3.0f / 256.0, 29.0f / 256.0f, 156.0 / 256.0f };
 
 public:
-    void OnAttach() override
-    {
-        // Load Data
-        main_texture = Texture2D::Create(
-            ".\\Assets\\Textures\\debug.jpg",
-            Texture2DProperties(
-                TextureWrapMode::Repeat,
-                TextureWrapMode::Repeat,
-                TextureFilterMode::Linear));
 
+    void LoadResources()
+    {
         auto mountain_tex = Texture2D::Create(
             ".\\CustomAssets\\Textures\\HITW_Terrain-Textures-Set\\HITW-mntn-snow-greys.jpg",
             Texture2DProperties(
@@ -117,24 +115,81 @@ public:
         main_material->SetTexture("u_terrain_textures[1]", barren_tex);
         main_material->SetTexture("u_terrain_textures[2]", grass_tex);
         main_material->SetTexture("u_terrain_textures[3]", forest_tex);
+    }
 
+    void InitializeCubemaps()
+    {
         int resolution = 512;
-        float spacing = 1.0f / resolution;
-        auto heightmap_data = std::make_shared<CubemapData>(resolution, 1);
-        auto normal_data = std::make_shared<CubemapData>(resolution, 3);
-        auto splatmap_data = std::make_shared<CubemapData>(resolution, 4);
 
+        height_data = std::make_shared<CubemapData>(resolution, 1);
+        normal_data = std::make_shared<CubemapData>(resolution, 3);
+        splat_data = std::make_shared<CubemapData>(resolution, 4);
+
+        height_cubemap = Cubemap::Create(resolution, 1);
+        normal_cubemap = Cubemap::Create(resolution, 3);
+        splat_cubemap = Cubemap::Create(resolution, 4);
+
+        main_material->SetTexture("u_heightmap", height_cubemap);
+        main_material->SetTexture("u_normal", normal_cubemap);
+        main_material->SetTexture("u_splatmap", splat_cubemap);
+    }
+
+    void BuildScene()
+    {
+        {// Camera
+            FrameBufferParameters fb_params;
+            fb_params.width = 1000;
+            fb_params.height = 1000;
+            fb_params.color_buffer_format = ColorBufferFormat::RGBA8;
+            fb_params.depth_buffer_format = DepthBufferFormat::DEPTH24_STENCIL8;
+            fbuffer = FrameBuffer::Create(fb_params);
+
+            camera = std::make_shared<PerspectiveCamera>(glm::pi<float>() / 3.0f, 1.0f, 0.1f, 20.0f);
+
+            auto entity = scene.CreateEntity();
+            auto camera_component = entity->AddComponent<CameraComponent>();
+            auto transform_comp = entity->AddComponent<TransformComponent>();
+            auto move_comp = entity->AddComponent<MovementControllerComponent>();
+            camera_component->data.camera = camera;
+            camera_component->data.frame_buffer = fbuffer;
+            camera_component->data.clear_color = glm::vec4(0.05f, 0.05f, 0.05f, 1.0f);
+            transform_comp->transform.Translate(glm::vec3(0.0f, 0.0f, 5.0f));
+        }
+        {// Sphere
+            mesh = BuildSphereMesh(20);
+            auto varray = UploadMesh(mesh);
+
+            auto entity = scene.CreateEntity();
+            auto transform_comp = entity->AddComponent<TransformComponent>();
+            auto mesh_render_comp = entity->AddComponent<MeshRenderComponent>();
+            auto rotation_comp = entity->AddComponent<RotatingPlanetComponent>();
+            rotation_comp->rotation_speed = 0.1;
+            mesh_render_comp->data.vertex_array = varray;
+            mesh_render_comp->data.material = main_material;
+        }
+        {// Light
+            auto entity = scene.CreateEntity();
+            auto light_comp = entity->AddComponent<DirectionalLightComponent>();
+            light_comp->data.color = glm::vec3(1.0, 1.0, 1.0);
+            light_comp->data.direction = glm::normalize(glm::vec3(1.0, 0.0, 0.0));
+            light_comp->data.irradiance = 5.0f;
+        }
+        scene.OnAwake();
+    }
+
+    void CalculateMaps()
+    {
         // Calculate heightmap
         std::vector<std::thread> threads;
         for (int face_id = CubeFace::Begin; face_id < CubeFace::End; face_id++)
         {
-            auto work = [face_id, heightmap_data]() {
+            auto work = [this, face_id]() {
                 auto face = static_cast<CubeFace>(face_id);
-                for (int j = 0; j < heightmap_data->GetResolution(); ++j)
+                for (int j = 0; j < height_data->GetResolution(); ++j)
                 {
-                    for (int i = 0; i < heightmap_data->GetResolution(); ++i)
+                    for (int i = 0; i < height_data->GetResolution(); ++i)
                     {
-                        auto point = CubemapData::CubePoint(heightmap_data->GetPixelCoordinates(face, i, j));
+                        auto point = CubemapData::CubePoint(height_data->GetPixelCoordinates(face, i, j));
                         point = glm::normalize(point);
 
                         float ridge_noise = 1.00f * FractalRidgeNoise(point, 2.0f, 4, 0.5f, 2.0f);
@@ -142,7 +197,7 @@ public:
                         float blend = 0.5f * (glm::simplex(1.0f * point) + 1.0f);
                         float noise = blend * ridge_noise + (1.0 - blend) * smooth_noise;
 
-                        heightmap_data->GetPixel(face, i, j, 0) = 0.5 + 0.1 * noise;
+                        height_data->GetPixel(face, i, j, 0) = 0.5 + 0.1 * noise;
                     }
                 }
             };
@@ -152,7 +207,7 @@ public:
             thread.join();
 
         // Erosion
-        float grid_spacing = 1.0f / heightmap_data->GetResolution();
+        float grid_spacing = 1.0f / height_data->GetResolution();
         ErosionParameters erosion_params;
         erosion_params.concentration_factor = 3.0f;
         erosion_params.erosion_time = 0.5f;
@@ -166,26 +221,26 @@ public:
         for (auto& p : particles) { InitializeParticle(p, erosion_params); }
         for (int i = 0; i < n_steps; ++i)
             for (auto& p : particles)
-                UpdateParticle(p, *heightmap_data, erosion_params);
+                UpdateParticle(p, *height_data, erosion_params);
 
         // Smooth to remove high frequency noise from erosion
         threads.clear();
         for (int face_id = CubeFace::Begin; face_id < CubeFace::End; face_id++)
         {
-            auto work = [face_id, heightmap_data]() {
+            auto work = [this, face_id]() {
                 auto face = static_cast<CubeFace>(face_id);
                 for (int k = 0; k < 1; ++k)
                 {
-                    for (int j = 1; j < heightmap_data->GetResolution() - 1; ++j)
+                    for (int j = 1; j < height_data->GetResolution() - 1; ++j)
                     {
-                        for (int i = 1; i < heightmap_data->GetResolution() - 1; ++i)
+                        for (int i = 1; i < height_data->GetResolution() - 1; ++i)
                         {
                             float average = 0.25f * (
-                                heightmap_data->GetPixel(face, i + 1, j, 0) +
-                                heightmap_data->GetPixel(face, i - 1, j, 0) +
-                                heightmap_data->GetPixel(face, i, j + 1, 0) +
-                                heightmap_data->GetPixel(face, i, j - 1, 0));
-                            heightmap_data->GetPixel(face, i, j, 0) = average;
+                                height_data->GetPixel(face, i + 1, j, 0) +
+                                height_data->GetPixel(face, i - 1, j, 0) +
+                                height_data->GetPixel(face, i, j + 1, 0) +
+                                height_data->GetPixel(face, i, j - 1, 0));
+                            height_data->GetPixel(face, i, j, 0) = average;
                         }
                     }
                 }
@@ -199,18 +254,18 @@ public:
         threads.clear();
         for (int face_id = CubeFace::Begin; face_id < CubeFace::End; face_id++)
         {
-            auto work = [face_id, heightmap_data, normal_data, spacing, resolution]() {
+            auto work = [this, face_id, grid_spacing]() {
                 auto face = static_cast<CubeFace>(face_id);
-                for (int j = 0; j < heightmap_data->GetResolution(); ++j)
+                for (int j = 0; j < height_data->GetResolution(); ++j)
                 {
-                    for (int i = 0; i < heightmap_data->GetResolution(); ++i)
+                    for (int i = 0; i < height_data->GetResolution(); ++i)
                     {
                         auto point = CubemapData::CubePoint(
-                            heightmap_data->GetPixelCoordinates(face, i, j));
+                            height_data->GetPixelCoordinates(face, i, j));
                         point = glm::normalize(point);
 
-                        auto eu = SphereHeightmapUTangent(point, *heightmap_data);
-                        auto ev = SphereHeightmapVTangent(point, *heightmap_data);
+                        auto eu = SphereHeightmapUTangent(point, *height_data);
+                        auto ev = SphereHeightmapVTangent(point, *height_data);
 
                         auto normal = -glm::cross(eu, ev);
                         normal = glm::normalize(normal);
@@ -230,13 +285,13 @@ public:
         threads.clear();
         for (int face_id = CubeFace::Begin; face_id < CubeFace::End; face_id++)
         {
-            auto work = [face_id, splatmap_data, heightmap_data]() {
+            auto work = [this, face_id]() {
                 auto face = static_cast<CubeFace>(face_id);
-                for (int j = 0; j < splatmap_data->GetResolution(); ++j)
+                for (int j = 0; j < splat_data->GetResolution(); ++j)
                 {
-                    for (int i = 0; i < splatmap_data->GetResolution(); ++i)
+                    for (int i = 0; i < splat_data->GetResolution(); ++i)
                     {
-                        auto point = CubemapData::CubePoint(splatmap_data->GetPixelCoordinates(face, i, j));
+                        auto point = CubemapData::CubePoint(splat_data->GetPixelCoordinates(face, i, j));
                         point = glm::normalize(point);
 
                         float cosT = glm::dot(point, glm::vec3(0.0, 1.0, 0.0));
@@ -287,10 +342,10 @@ public:
                             grass *= 0.0f;
                         }
 
-                        splatmap_data->GetPixel(face, i, j, 0) = tundra;
-                        splatmap_data->GetPixel(face, i, j, 1) = shrub;
-                        splatmap_data->GetPixel(face, i, j, 2) = grass;
-                        splatmap_data->GetPixel(face, i, j, 3) = forest;
+                        splat_data->GetPixel(face, i, j, 0) = tundra;
+                        splat_data->GetPixel(face, i, j, 1) = shrub;
+                        splat_data->GetPixel(face, i, j, 2) = grass;
+                        splat_data->GetPixel(face, i, j, 3) = forest;
                     }
                 }
             };
@@ -299,59 +354,23 @@ public:
         for (auto& thread : threads)
             thread.join();
 
-        height_cubemap = UploadCubemap(heightmap_data);
-        normal_cubemap = UploadCubemap(normal_data);
-        auto splatmap = UploadCubemap(splatmap_data);
-        main_material->SetTexture("u_heightmap", height_cubemap);
-        main_material->SetTexture("u_normal", normal_cubemap);
-        main_material->SetTexture("u_splatmap", splatmap);
+        // Upload data to textures
+        for (int face_id = CubeFace::Begin; face_id < CubeFace::End; face_id++)
+        {
+            auto face = static_cast<CubeFace>(face_id);
 
-        mesh = BuildSphereMesh(20);
-        //CalculateTangentFrame(mesh);
-        auto varray = UploadMesh(mesh);
-
-        {// Camera
-            FrameBufferParameters fb_params;
-            fb_params.width = 1000;
-            fb_params.height = 1000;
-            fb_params.color_buffer_format = ColorBufferFormat::RGBA8;
-            fb_params.depth_buffer_format = DepthBufferFormat::DEPTH24_STENCIL8;
-            fbuffer = FrameBuffer::Create(fb_params);
-
-            camera = std::make_shared<PerspectiveCamera>(glm::pi<float>() / 3.0f, 1.0f, 0.1f, 20.0f);
-
-            auto entity = scene.CreateEntity();
-            auto camera_component = entity->AddComponent<CameraComponent>();
-            auto transform_comp = entity->AddComponent<TransformComponent>();
-            auto move_comp = entity->AddComponent<MovementControllerComponent>();
-            camera_component->data.camera = camera;
-            camera_component->data.frame_buffer = fbuffer;
-            camera_component->data.clear_color = glm::vec4(0.05f, 0.05f, 0.05f, 1.0f);
-            transform_comp->transform.Translate(glm::vec3(0.0f, 0.0f, 5.0f));
-
-            camera_transform = transform_comp;
+            height_cubemap->SetFaceData(face, height_data->GetFaceDataPointer(face));
+            normal_cubemap->SetFaceData(face, normal_data->GetFaceDataPointer(face));
+            splat_cubemap->SetFaceData(face, splat_data->GetFaceDataPointer(face));
         }
-        {// Sphere
-            auto entity = scene.CreateEntity();
-            auto transform_comp = entity->AddComponent<TransformComponent>();
-            auto mesh_render_comp = entity->AddComponent<MeshRenderComponent>();
-            auto rotation_comp = entity->AddComponent<RotatingPlanetComponent>();
-            rotation_comp->rotation_speed = 0.1;
-            mesh_render_comp->data.vertex_array = varray;
-            mesh_render_comp->data.material = main_material;
-        }
-        {// Light
-            auto entity = scene.CreateEntity();
-            auto light_comp = entity->AddComponent<DirectionalLightComponent>();
-            light_comp->data.color = glm::vec3(1.0, 1.0, 1.0);
-            light_comp->data.direction = glm::normalize(glm::vec3(1.0, 0.0, 0.0));
-            light_comp->data.irradiance = 5.0f;
-        }
-        scene.OnAwake();
     }
 
-    void OnDetatch() override
+    void OnAttach() override
     {
+        LoadResources();
+        InitializeCubemaps();
+        BuildScene();
+        CalculateMaps();
     }
 
     void OnUpdate(float time_step) override
