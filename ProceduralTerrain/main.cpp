@@ -17,8 +17,7 @@ using namespace Merlin;
 
 class SceneLayer : public Layer
 {
-    std::shared_ptr<Camera> camera = nullptr;
-    std::shared_ptr<Material> main_material = nullptr;
+    std::shared_ptr<Material> terrain_material = nullptr;
 
     std::shared_ptr<CubemapData> height_data = nullptr;
     std::shared_ptr<CubemapData> normal_data = nullptr;
@@ -31,7 +30,6 @@ class SceneLayer : public Layer
     std::shared_ptr<EditorWindow> editor_window = nullptr;
 
     std::shared_ptr<FrameBuffer> fbuffer;
-    std::shared_ptr<Mesh<Vertex_XNTBUV>> mesh;
     GameScene scene;
 
     float time_elapsed = 0.0f;
@@ -40,6 +38,7 @@ public:
 
     void LoadResources()
     {
+        // Load textures
         auto mountain_tex = Texture2D::Create(
             ".\\CustomAssets\\Textures\\HITW_Terrain-Textures-Set\\HITW-mntn-snow-greys.jpg",
             Texture2DProperties(
@@ -75,11 +74,14 @@ public:
                 TextureWrapMode::Repeat,
                 TextureFilterMode::Linear));
 
+        // Compile shader program
         auto main_shader = Shader::CreateFromFiles(
             ".\\CustomAssets\\Shaders\\cube_sphere.vert",
             ".\\CustomAssets\\Shaders\\cube_sphere.frag");
         main_shader->Bind();
-        main_material = std::make_shared<Material>(
+
+        // Specify material and set textures
+        terrain_material = std::make_shared<Material>(
             main_shader,
             BufferLayout
             {
@@ -106,11 +108,11 @@ public:
                 "u_terrain_textures[3]",
         }
         );
-        main_material->SetTexture("u_water_normalmap", water_tex);
-        main_material->SetTexture("u_terrain_textures[0]", mountain_tex);
-        main_material->SetTexture("u_terrain_textures[1]", barren_tex);
-        main_material->SetTexture("u_terrain_textures[2]", grass_tex);
-        main_material->SetTexture("u_terrain_textures[3]", forest_tex);
+        terrain_material->SetTexture("u_water_normalmap", water_tex);
+        terrain_material->SetTexture("u_terrain_textures[0]", mountain_tex);
+        terrain_material->SetTexture("u_terrain_textures[1]", barren_tex);
+        terrain_material->SetTexture("u_terrain_textures[2]", grass_tex);
+        terrain_material->SetTexture("u_terrain_textures[3]", forest_tex);
     }
 
     void InitializeCubemaps()
@@ -125,9 +127,9 @@ public:
         normal_cubemap = Cubemap::Create(resolution, 3);
         splat_cubemap = Cubemap::Create(resolution, 4);
 
-        main_material->SetTexture("u_heightmap", height_cubemap);
-        main_material->SetTexture("u_normal", normal_cubemap);
-        main_material->SetTexture("u_splatmap", splat_cubemap);
+        terrain_material->SetTexture("u_heightmap", height_cubemap);
+        terrain_material->SetTexture("u_normal", normal_cubemap);
+        terrain_material->SetTexture("u_splatmap", splat_cubemap);
     }
 
     void BuildScene()
@@ -140,19 +142,18 @@ public:
             fb_params.depth_buffer_format = DepthBufferFormat::DEPTH24_STENCIL8;
             fbuffer = FrameBuffer::Create(fb_params);
 
-            camera = std::make_shared<PerspectiveCamera>(glm::pi<float>() / 3.0f, 1.0f, 0.1f, 20.0f);
-
             auto entity = scene.CreateEntity();
             auto camera_component = entity->AddComponent<CameraComponent>();
             auto transform_comp = entity->AddComponent<TransformComponent>();
             auto move_comp = entity->AddComponent<MovementControllerComponent>();
-            camera_component->data.camera = camera;
+            camera_component->data.camera = std::make_shared<PerspectiveCamera>(
+                glm::pi<float>() / 3.0f, 1.0f, 0.1f, 20.0f);
             camera_component->data.frame_buffer = fbuffer;
             camera_component->data.clear_color = glm::vec4(0.05f, 0.05f, 0.05f, 1.0f);
             transform_comp->transform.Translate(glm::vec3(0.0f, 0.0f, 5.0f));
         }
         {// Sphere
-            mesh = BuildSphereMesh(20);
+            auto mesh = BuildSphereMesh(20);
             auto varray = UploadMesh(mesh);
 
             auto entity = scene.CreateEntity();
@@ -161,7 +162,7 @@ public:
             auto rotation_comp = entity->AddComponent<RotatingPlanetComponent>();
             rotation_comp->rotation_speed = 0.1;
             mesh_render_comp->data.vertex_array = varray;
-            mesh_render_comp->data.material = main_material;
+            mesh_render_comp->data.material = terrain_material;
         }
         {// Light
             auto entity = scene.CreateEntity();
@@ -199,15 +200,17 @@ public:
         InitializeCubemaps();
         BuildScene();
         CalculateMaps();
-        editor_window = std::make_shared<EditorWindow>(main_material);
+        editor_window = std::make_shared<EditorWindow>(terrain_material);
     }
 
     void OnUpdate(float time_step) override
     {
         time_elapsed += time_step;
-        main_material->SetUniformFloat("time", time_elapsed);
+        terrain_material->SetUniformFloat("time", time_elapsed);
 
         scene.OnUpdate(time_step);
+        scene.RenderScene();
+
         {
             Renderer::SetViewport(
                 0, 0,
@@ -215,7 +218,6 @@ public:
                 Application::Get().GeMaintWindow()->GetHeight());
             Renderer::SetClearColor(glm::vec4(0.2f, 0.3f, 0.3f, 1.0f));
             Renderer::Clear();
-            scene.RenderScene();
         }
         {
             auto& io = ImGui::GetIO();
@@ -241,12 +243,9 @@ public:
         }
     }
 
-    virtual void OnDetatch() override {};
+    void OnDetatch() override {};
 
-    virtual void HandleEvent(AppEvent& app_event) override
-    {
-    }
-
+    void HandleEvent(AppEvent& app_event) override {}
 };
 
 class ProceduralTerrainApp : public Application
