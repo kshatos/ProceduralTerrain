@@ -44,13 +44,13 @@ class SceneLayer : public Layer
     GameScene scene;
 
     float time_elapsed = 0.0f;
-    float texture_scales[4]{ 5.0f, 5.0f, 5.0f, 5.0f };
-    float water_scale = 5.0f;
-    float water_speed = 0.1f;
-    float water_level = 0.5f;
-    float water_depth_scale = 1.0f;
-    glm::vec3 water_shallow_color{ 0.0f, 1.0f, 0.0f };
-    glm::vec3 water_deep_color{ 0.0f, 0.5f, 0.0f };
+    float texture_scales[4]{ 2.5f, 2.5f, 2.5f, 2.5f };
+    float water_scale = 0.01;
+    float water_speed = 0.038f;
+    float water_level = 0.543f;
+    float water_depth_scale = 0.017f;
+    glm::vec3 water_shallow_color{ 1.0f/256.0, 5.0f/256.0f, 38.0/256.0f };
+    glm::vec3 water_deep_color{ 3.0f / 256.0, 29.0f / 256.0f, 156.0 / 256.0f };
 
 public:
     void OnAttach() override
@@ -404,7 +404,7 @@ public:
             main_material->SetUniformFloat("u_water_depth_scale", water_depth_scale);
             ImGui::SliderFloat("Water Speed", &water_speed, 0.0f, 1.0f);
             main_material->SetUniformFloat("u_water_speed", water_speed);
-            ImGui::SliderFloat("Water Scale", &water_scale, 0.001f, 10.0f);
+            ImGui::SliderFloat("Water Scale", &water_scale, 0.0f, 1.0f);
             main_material->SetUniformFloat("u_water_scale", water_scale);
             ImGui::SliderFloat("Texture0 Scale", &texture_scales[0], 0.001f, 10.0f);
             main_material->SetUniformFloat("u_terrain_texture_scales[0]", texture_scales[0]);

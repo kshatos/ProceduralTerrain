@@ -31,7 +31,7 @@ glm::vec3 SphereHeightmapPoint(
 {
     auto coordinates = CubemapData::PointCoordinates(direction);
     auto height = BilinearInterpolate(heightmap, coordinates, 0);
-    return direction * (1.0f + height);
+    return direction * (0.5f + height);
 }
 
 glm::vec3 SphereHeightmapPoint(
@@ -40,7 +40,7 @@ glm::vec3 SphereHeightmapPoint(
 {
     auto direction = CubeToSphere(CubemapData::CubePoint(coordinates));
     auto height = BilinearInterpolate(heightmap, coordinates, 0);
-    return direction * (1.0f + height);
+    return direction * (0.5f + height);
 }
 
 glm::vec3 SphereHeightmapUTangent(
@@ -50,7 +50,7 @@ glm::vec3 SphereHeightmapUTangent(
     float step = 1.0f / heightmap.GetResolution();
 
     auto coordinates = CubemapData::PointCoordinates(direction);
-    auto p0 =  SphereHeightmapPoint(coordinates, heightmap);
+    auto p0 = SphereHeightmapPoint(coordinates, heightmap);
 
     coordinates.u += step;
     auto p1 = SphereHeightmapPoint(coordinates, heightmap);
