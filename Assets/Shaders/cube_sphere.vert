@@ -17,6 +17,7 @@ layout (location = 2) in vec3 aTangent;
 layout (location = 3) in vec3 aBitangent;
 layout (location = 4) in vec2 aTexCoord;
 
+out vec3 ModelPos;
 out vec3 Pos;
 out vec3 Normal;
 out vec3 Tangent;
@@ -26,6 +27,7 @@ out vec2 TexCoord;
 
 void main()
 {
+    ModelPos = aPos;
     Pos = vec3(u_ModelMatrix * vec4(aPos, 1.0));
     Normal = u_NormalMatrix * aNormal;
     Tangent = u_NormalMatrix * aTangent;

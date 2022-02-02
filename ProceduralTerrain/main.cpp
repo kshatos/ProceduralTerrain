@@ -13,23 +13,29 @@
 using namespace Merlin;
 
 
-void DumpData(
-    std::vector<ErosionParticle> data,
-    std::string filename)
+class RotatingPlanetComponent : public Component
 {
-    std::ofstream file;
-    file.open(filename);
-    for (auto& item : data)
-    {
-        std::string line = (
-            std::to_string(item.position.x) + ", " +
-            std::to_string(item.position.y) + ", " +
-            std::to_string(item.position.z));
+    std::shared_ptr<TransformComponent> m_transform = nullptr;
+public:
+    glm::vec3 axis{ 0.0f, 1.0f, 0.0f };
+    float rotation_speed = 1.0f;
 
-        file << line << std::endl;
+    RotatingPlanetComponent(Entity* parent) : Component(parent)
+    {
     }
-    file.close();
-}
+
+    void OnAwake() override
+    {
+        m_transform = m_parent->GetComponent<TransformComponent>();
+    }
+
+    void OnUpdate(float time_step)
+    {
+        m_transform->transform.Rotate(
+            axis, time_step * rotation_speed);
+    }
+};
+
 
 class SceneLayer : public Layer
 {
@@ -49,7 +55,7 @@ class SceneLayer : public Layer
     float water_speed = 0.038f;
     float water_level = 0.543f;
     float water_depth_scale = 0.017f;
-    glm::vec3 water_shallow_color{ 1.0f/256.0, 5.0f/256.0f, 38.0/256.0f };
+    glm::vec3 water_shallow_color{ 1.0f / 256.0, 5.0f / 256.0f, 38.0 / 256.0f };
     glm::vec3 water_deep_color{ 3.0f / 256.0, 29.0f / 256.0f, 156.0 / 256.0f };
 
 public:
@@ -351,6 +357,8 @@ public:
             auto entity = scene.CreateEntity();
             auto transform_comp = entity->AddComponent<TransformComponent>();
             auto mesh_render_comp = entity->AddComponent<MeshRenderComponent>();
+            auto rotation_comp = entity->AddComponent<RotatingPlanetComponent>();
+            rotation_comp->rotation_speed = 0.1;
             mesh_render_comp->data.vertex_array = varray;
             mesh_render_comp->data.material = main_material;
         }
