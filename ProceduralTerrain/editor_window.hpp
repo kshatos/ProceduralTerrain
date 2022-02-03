@@ -22,31 +22,75 @@ public:
     {
     }
 
+
     void Draw()
     {
-        ImGui::Begin("Settings");
-        ImGui::ColorPicker4("Shallow Water Color", &water_shallow_color.x);
-        m_material->SetUniformFloat3("u_water_shallow_color", water_shallow_color);
-        ImGui::ColorPicker4("Deep Water Color", &water_deep_color.x);
-        m_material->SetUniformFloat3("u_water_deep_color", water_deep_color);
-        ImGui::SliderFloat("u_water_level", &water_level, 0.0f, 1.0f);
-        m_material->SetUniformFloat("u_water_level", water_level);
-        ImGui::SliderFloat("u_water_depth_scale", &water_depth_scale, 0.0f, 0.1f);
-        m_material->SetUniformFloat("u_water_depth_scale", water_depth_scale);
-        ImGui::SliderFloat("Water Speed", &water_speed, 0.0f, 1.0f);
-        m_material->SetUniformFloat("u_water_speed", water_speed);
-        ImGui::SliderFloat("Water Scale", &water_scale, 0.0f, 1.0f);
-        m_material->SetUniformFloat("u_water_scale", water_scale);
-        ImGui::SliderFloat("Texture0 Scale", &texture_scales[0], 0.001f, 10.0f);
-        m_material->SetUniformFloat("u_terrain_texture_scales[0]", texture_scales[0]);
-        ImGui::SliderFloat("Texture1 Scale", &texture_scales[1], 0.001f, 10.0f);
-        m_material->SetUniformFloat("u_terrain_texture_scales[1]", texture_scales[1]);
-        ImGui::SliderFloat("Texture2 Scale", &texture_scales[2], 0.001f, 10.0f);
-        m_material->SetUniformFloat("u_terrain_texture_scales[2]", texture_scales[2]);
-        ImGui::SliderFloat("Texture3 Scale", &texture_scales[3], 0.001f, 10.0f);
-        m_material->SetUniformFloat("u_terrain_texture_scales[3]", texture_scales[3]);
+        ImGui::Begin(
+            "Settings",
+            false,
+            ImGuiWindowFlags_NoResize |
+            ImGuiWindowFlags_NoMove |
+            ImGuiWindowFlags_NoCollapse |
+            ImGuiWindowFlags_NoTitleBar |
+            ImGuiWindowFlags_MenuBar);
+        ImGui::SetWindowSize(ImVec2(400, 10000));
+
+        if (ImGui::BeginTabBar("Settings Groups"))
+        {
+            if (ImGui::BeginTabItem("Water"))
+            {
+                DrawWaterTab();
+                ImGui::EndTabItem();
+            }
+
+            if (ImGui::BeginTabItem("Terrain"))
+            {
+                DrawTerrainTab();
+                ImGui::EndTabItem();
+            }
+
+            ImGui::EndTabBar();
+        }
+
         ImGui::End();
+
+        SetMaterialProperties();
     }
+
+private:
+    void DrawWaterTab()
+    {
+        ImGui::ColorPicker4("Shallow Water Color", &water_shallow_color.x);
+        ImGui::ColorPicker4("Deep Water Color", &water_deep_color.x);
+        ImGui::SliderFloat("u_water_level", &water_level, 0.0f, 1.0f);
+        ImGui::SliderFloat("u_water_depth_scale", &water_depth_scale, 0.0f, 0.1f);
+        ImGui::SliderFloat("Water Speed", &water_speed, 0.0f, 1.0f);
+        ImGui::SliderFloat("Water Scale", &water_scale, 0.0f, 1.0f);
+    }
+
+    void DrawTerrainTab()
+    {
+        ImGui::SliderFloat("Texture0 Scale", &texture_scales[0], 0.001f, 10.0f);
+        ImGui::SliderFloat("Texture1 Scale", &texture_scales[1], 0.001f, 10.0f);
+        ImGui::SliderFloat("Texture2 Scale", &texture_scales[2], 0.001f, 10.0f);
+        ImGui::SliderFloat("Texture3 Scale", &texture_scales[3], 0.001f, 10.0f);
+    }
+
+    void SetMaterialProperties()
+    {
+        m_material->SetUniformFloat3("u_water_shallow_color", water_shallow_color);
+        m_material->SetUniformFloat3("u_water_deep_color", water_deep_color);
+        m_material->SetUniformFloat("u_water_level", water_level);
+        m_material->SetUniformFloat("u_water_depth_scale", water_depth_scale);
+        m_material->SetUniformFloat("u_water_speed", water_speed);
+        m_material->SetUniformFloat("u_water_scale", water_scale);
+
+        m_material->SetUniformFloat("u_terrain_texture_scales[0]", texture_scales[0]);
+        m_material->SetUniformFloat("u_terrain_texture_scales[1]", texture_scales[1]);
+        m_material->SetUniformFloat("u_terrain_texture_scales[2]", texture_scales[2]);
+        m_material->SetUniformFloat("u_terrain_texture_scales[3]", texture_scales[3]);
+    }
+
 };
 
 #endif
