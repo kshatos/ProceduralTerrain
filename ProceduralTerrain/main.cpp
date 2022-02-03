@@ -136,8 +136,8 @@ public:
     {
         {// Camera
             FrameBufferParameters fb_params;
-            fb_params.width = 1000;
-            fb_params.height = 1000;
+            fb_params.width = 600;
+            fb_params.height = 600;
             fb_params.color_buffer_format = ColorBufferFormat::RGBA8;
             fb_params.depth_buffer_format = DepthBufferFormat::DEPTH24_STENCIL8;
             fbuffer = FrameBuffer::Create(fb_params);
@@ -227,16 +227,8 @@ public:
 
             ImGui_ImplOpenGL3_NewFrame();
             ImGui::NewFrame();
-            editor_window->Draw();
 
-            auto s_buffer = fbuffer;
-            auto s_buffer_params = s_buffer->GetParameters();
-            uint32_t tex_id = s_buffer->GetColorAttachmentID();
-            ImGui::Image(
-                (ImTextureID)tex_id,
-                ImVec2{
-                    (float)s_buffer_params.width,
-                    (float)s_buffer_params.height });
+            editor_window->Draw(fbuffer);
 
             ImGui::Render();
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -246,6 +238,7 @@ public:
     void OnDetatch() override {};
 
     void HandleEvent(AppEvent& app_event) override {}
+
 };
 
 class ProceduralTerrainApp : public Application
