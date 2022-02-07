@@ -10,12 +10,12 @@ class EditorWindow
     const float settings_width = 300.0f;
     const float element_width = 150.0f;
     float texture_scales[4]{ 2.5f, 2.5f, 2.5f, 2.5f };
-    float water_scale = 0.01;
-    float water_speed = 0.038f;
-    float water_level = 0.543f;
+    float water_scale = 0.08;
+    float water_speed = 0.1f;
+    float water_level = 0.5f;
     float water_depth_scale = 0.017f;
-    glm::vec3 water_shallow_color{ 1.0f / 256.0, 5.0f / 256.0f, 38.0 / 256.0f };
-    glm::vec3 water_deep_color{ 3.0f / 256.0, 29.0f / 256.0f, 156.0 / 256.0f };
+    glm::vec3 water_shallow_color{ 0.0f / 256.0, 64.0f / 256.0f, 89.0 / 256.0f };
+    glm::vec3 water_deep_color{ 0.0f / 256.0, 28.0f / 256.0f, 34.0 / 256.0f };
 
     ImVec2 viewport_size{ 0.0f, 0.0f };
 
@@ -97,19 +97,19 @@ private:
 
         ImGui::Separator();
         ImGui::SetNextItemWidth(element_width);
-        ImGui::SliderFloat("Water Level", &water_level, 0.0f, 1.0f);
+        ImGui::SliderFloat("Water Level", &water_level, 0.3f, 0.8f);
 
         ImGui::Separator();
         ImGui::SetNextItemWidth(element_width);
-        ImGui::SliderFloat("Water Depth Scale", &water_depth_scale, 0.0f, 0.1f);
+        ImGui::SliderFloat("Water Depth Scale", &water_depth_scale, 0.0f, 0.05f);
 
         ImGui::Separator();
         ImGui::SetNextItemWidth(element_width);
-        ImGui::SliderFloat("Water Wave Speed", &water_speed, 0.0f, 1.0f);
+        ImGui::SliderFloat("Water Wave Speed", &water_speed, 0.0f, 0.3f);
 
         ImGui::Separator();
         ImGui::SetNextItemWidth(element_width);
-        ImGui::SliderFloat("Water Texture Scale", &water_scale, 0.0f, 1.0f);
+        ImGui::SliderFloat("Water Texture Scale", &water_scale, 0.01f, 0.5f);
 
         ImGui::Separator();
     }

@@ -382,12 +382,10 @@ vec4 SampleTerrain(vec3 position)
 //////////////////////////////
 // Water
 //////////////////////////////
-vec3 SampleWaterNormal(
-    sampler2D tex,
-    vec3 pos,
-    vec3 normal)
+vec3 SampleWaterNormal(sampler2D tex, vec3 pos)
 {
-    // 
+    vec3 normal = normalize(pos);
+
     vec3 x_normal = 2.0 * SampleStochastic(
         tex, pos.yz / u_water_scale + time * u_water_speed * vec2(0.5, 0.5)).xyz - 1.0;
     x_normal += 2.0 * SampleStochastic(
@@ -432,17 +430,17 @@ vec3 SampleWaterNormal(
 void main()
 {
     float height = texture(u_heightmap, ModelPos).x;
-    float blend = smoothstep(-1.0, 0.0, (u_water_level - height) / u_water_depth_scale);
-    float mask = height >= u_water_level ? 0.0 : 1.0;
+    float blend = smoothstep(-1.0, 0.0, (height - u_water_level) / u_water_depth_scale);
+    float mask = height >= u_water_level ? 1.0 : 0.0;
 
-    vec3 water_normal = SampleWaterNormal(u_water_normalmap, ModelPos, Normal);
+    vec3 water_normal = u_NormalMatrix * SampleWaterNormal(u_water_normalmap, ModelPos);
     water_normal = normalize((1.0 - blend) * water_normal + blend * Normal);
     vec3 land_normal = u_NormalMatrix * normalize(2.0 * texture(u_normal, ModelPos).xyz - 1.0);
 
-    vec3 water_color = (1.0 - blend) * u_water_shallow_color + blend * u_water_deep_color;
+    vec3 water_color = (1.0 - blend) * u_water_deep_color + blend * u_water_shallow_color;
     vec3 land_color = SampleTerrain(ModelPos).xyz;
 
-    vec3 normal = normalize((1.0 - mask) * water_normal + mask * land_normal);
+    vec3 normal = (1.0 - mask) * water_normal + mask * land_normal;
     vec3 albedo = (1.0 - blend) * water_color + blend * land_color;
     float roughness = (1.0 - blend) * 0.2  + blend * 0.70;
 
@@ -462,7 +460,8 @@ void main()
     }
     for (int i=0; i < u_nDirectionalLights; i++)
     {
-        float shadow = i==0 ? DirectionalLightShadow(surface.position, surface.normal, -u_directionalLights[i].direction) : 1.0;
+        float shadow = dot(-u_directionalLights[i].direction, surface.position) > 0.0 ? 1.0 : 0.0;
+        //float shadow = i==0 ? DirectionalLightShadow(surface.position, surface.normal, -u_directionalLights[i].direction) : 1.0;
         result += shadow * DirectionalLightReflectedRadiance(u_directionalLights[i], surface);
     }
     for (int i = 0; i < u_nSpotLights; i++)
