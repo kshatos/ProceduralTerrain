@@ -136,8 +136,8 @@ public:
     {
         {// Camera
             FrameBufferParameters fb_params;
-            fb_params.width = 600;
-            fb_params.height = 600;
+            fb_params.width = 900;
+            fb_params.height = 900;
             fb_params.color_buffer_format = ColorBufferFormat::RGBA8;
             fb_params.depth_buffer_format = DepthBufferFormat::DEPTH24_STENCIL8;
             fbuffer = FrameBuffer::Create(fb_params);
@@ -178,8 +178,8 @@ public:
     {
         // Procedurally generate map data
         GenerateNoiseHeightmap(height_data);
-        ErodeHeightmap(height_data);
-        SmoothMap(height_data, 1);
+        //ErodeHeightmap(height_data);
+        //SmoothMap(height_data, 1);
         CalculateNormalMap(height_data, normal_data);
         GenerateBiomes(splat_data);
 

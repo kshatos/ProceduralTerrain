@@ -26,7 +26,7 @@ void GenerateNoiseHeightmap(std::shared_ptr<CubemapData>& height_data)
                     float blend = 0.5f * (glm::simplex(1.0f * point) + 1.0f);
                     float noise = blend * ridge_noise + (1.0 - blend) * smooth_noise;
 
-                    height_data->GetPixel(face, i, j, 0) = 0.5 + 0.1 * noise;
+                    height_data->GetPixel(face, i, j, 0) = 0.5 + 0.03 * ridge_noise;
                 }
             }
         };
