@@ -3,6 +3,7 @@
 #include <imgui.h>
 #include <Merlin/Render/material.hpp>
 #include <Merlin/Core/logger.hpp>
+#include <functional>
 
 
 class EditorWindow
@@ -76,7 +77,16 @@ public:
             true,
             ImGuiWindowFlags_NoScrollbar);
         ImGui::Image((ImTextureID)tex_id, fbuffer_size);
-        viewport_size = ImGui::GetWindowSize();
+        auto new_size = ImGui::GetWindowSize();
+        //auto new_size = ImGui::GetContentRegionAvail();
+
+        if (new_size.x != viewport_size.x || new_size.y != viewport_size.y)
+        {
+            fbuffer_params.width = new_size.x;
+            fbuffer_params.height = new_size.y;
+            fbuffer->Rebuild();
+            viewport_size = new_size;
+        }
 
         ImGui::EndChild();
 
