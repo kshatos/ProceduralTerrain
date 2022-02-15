@@ -78,13 +78,14 @@ public:
             true,
             ImGuiWindowFlags_NoScrollbar);
         ImGui::Image((ImTextureID)tex_id, fbuffer_size);
-        auto new_size = ImGui::GetWindowSize();
-        //auto new_size = ImGui::GetContentRegionAvail();
+        ImVec2 vmin = ImGui::GetWindowContentRegionMin();
+        ImVec2 vmax = ImGui::GetWindowContentRegionMax();
+        auto new_size = ImVec2{vmax.x-vmin.x, vmax.y-vmin.y};
 
         if (new_size.x != viewport_size.x || new_size.y != viewport_size.y)
         {
-            fbuffer_params.width = new_size.x;
-            fbuffer_params.height = new_size.y;
+            fbuffer_params.width = std::max(1.0f, new_size.x);
+            fbuffer_params.height = std::max(1.0f, new_size.y);
             fbuffer->Rebuild();
             float aspect_ratio = new_size.x / new_size.y;
             camera_data.camera->SetAspectRatio(aspect_ratio);
