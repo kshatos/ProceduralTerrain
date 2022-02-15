@@ -3,6 +3,7 @@
 #include <imgui.h>
 #include <Merlin/Render/material.hpp>
 #include <Merlin/Core/logger.hpp>
+#include <functional>
 
 
 class EditorWindow
@@ -29,8 +30,9 @@ public:
     {
     }
 
-    void Draw(std::shared_ptr<Merlin::FrameBuffer>& fbuffer)
+    void Draw(const CameraRenderData& camera_data)
     {
+        auto& fbuffer = camera_data.frame_buffer;
         auto& display_size = ImGui::GetIO().DisplaySize;
         auto& fbuffer_params = fbuffer->GetParameters();
         uint32_t tex_id = fbuffer->GetColorAttachmentID();
@@ -76,7 +78,19 @@ public:
             true,
             ImGuiWindowFlags_NoScrollbar);
         ImGui::Image((ImTextureID)tex_id, fbuffer_size);
-        viewport_size = ImGui::GetWindowSize();
+        ImVec2 vmin = ImGui::GetWindowContentRegionMin();
+        ImVec2 vmax = ImGui::GetWindowContentRegionMax();
+        auto new_size = ImVec2{vmax.x-vmin.x, vmax.y-vmin.y};
+
+        if (new_size.x != viewport_size.x || new_size.y != viewport_size.y)
+        {
+            fbuffer_params.width = std::max(1.0f, new_size.x);
+            fbuffer_params.height = std::max(1.0f, new_size.y);
+            fbuffer->Rebuild();
+            float aspect_ratio = new_size.x / new_size.y;
+            camera_data.camera->SetAspectRatio(aspect_ratio);
+            viewport_size = new_size;
+        }
 
         ImGui::EndChild();
 

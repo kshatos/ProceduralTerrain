@@ -29,7 +29,8 @@ class SceneLayer : public Layer
 
     std::shared_ptr<EditorWindow> editor_window = nullptr;
 
-    std::shared_ptr<FrameBuffer> fbuffer;
+    CameraRenderData* camera_data = nullptr;
+
     GameScene scene;
 
     float time_elapsed = 0.0f;
@@ -140,7 +141,7 @@ public:
             fb_params.height = 900;
             fb_params.color_buffer_format = ColorBufferFormat::RGBA8;
             fb_params.depth_buffer_format = DepthBufferFormat::DEPTH24_STENCIL8;
-            fbuffer = FrameBuffer::Create(fb_params);
+            auto fbuffer = FrameBuffer::Create(fb_params);
 
             auto entity = scene.CreateEntity();
             auto camera_component = entity->AddComponent<CameraComponent>();
@@ -151,6 +152,8 @@ public:
             camera_component->data.frame_buffer = fbuffer;
             camera_component->data.clear_color = glm::vec4(0.05f, 0.05f, 0.05f, 1.0f);
             transform_comp->transform.Translate(glm::vec3(0.0f, 0.0f, 5.0f));
+
+            camera_data = &camera_component->data;
         }
         {// Sphere
             auto mesh = BuildSphereMesh(20);
@@ -228,7 +231,7 @@ public:
             ImGui_ImplOpenGL3_NewFrame();
             ImGui::NewFrame();
 
-            editor_window->Draw(fbuffer);
+            editor_window->Draw(*camera_data);
 
             ImGui::Render();
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -244,7 +247,7 @@ public:
 class ProceduralTerrainApp : public Application
 {
 public:
-    ProceduralTerrainApp()
+    ProceduralTerrainApp(const WindowProperties& props) : Application(props)
     {
         PushLayerBack(std::make_shared<SceneLayer>());
     }
@@ -253,6 +256,7 @@ public:
 
 void main()
 {
-    ProceduralTerrainApp app;
+    ProceduralTerrainApp app(WindowProperties
+        {"Procedural Terrain", 800, 800});
     app.Run();
 }
